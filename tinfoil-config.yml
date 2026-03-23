@@ -35,6 +35,22 @@ containers:
     env:
       - DOCLING_SERVE_ARTIFACTS_PATH: "/tinfoil/cache/docling/models"
 
+  - name: "whisper-large-v3-turbo"
+    image: "ghcr.io/tinfoilsh/vllm-openai-audio@sha256:79ad92b15a7ad72a123321309260389eab51db4b3faeaa94c6313b176ad3f30c" # v0.0.12
+    runtime: nvidia
+    gpus: all
+    ipc: host
+    env:
+      - PROXY_PORT: "8203"
+      - HF_HOME: "/tinfoil/cache/whisper"
+    command: [
+      "--model", "openai/whisper-large-v3-turbo",
+      "--revision", "41f01f3fe87f28c78e2fbf8b568835947dd65ed9",
+      "--served-model-name", "whisper-large-v3-turbo",
+      "--port", "8207",
+      "--gpu-memory-utilization", "0.03"
+    ]
+
   - name: "voxtral-mini-realtime"
     image: "ghcr.io/tinfoilsh/vllm-openai-audio@sha256:79ad92b15a7ad72a123321309260389eab51db4b3faeaa94c6313b176ad3f30c" # v0.0.12
     runtime: nvidia
@@ -56,22 +72,6 @@ containers:
       "--gpu-memory-utilization", "0.20",
       "--port", "8401",
       "--host", "0.0.0.0"
-    ]
-
-  - name: "whisper-large-v3-turbo"
-    image: "ghcr.io/tinfoilsh/vllm-openai-audio@sha256:79ad92b15a7ad72a123321309260389eab51db4b3faeaa94c6313b176ad3f30c" # v0.0.12
-    runtime: nvidia
-    gpus: all
-    ipc: host
-    env:
-      - PROXY_PORT: "8203"
-      - HF_HOME: "/tinfoil/cache/whisper"
-    command: [
-      "--model", "openai/whisper-large-v3-turbo",
-      "--revision", "41f01f3fe87f28c78e2fbf8b568835947dd65ed9",
-      "--served-model-name", "whisper-large-v3-turbo",
-      "--port", "8207",
-      "--gpu-memory-utilization", "0.05"
     ]
 
   - name: "qwen3-tts"
