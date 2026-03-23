@@ -1,0 +1,123 @@
+cvm-version: 0.7.3
+memory: 65536
+cpus: 16
+gpus: 1
+
+containers:
+  - name: "router"
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models:latest"
+    env:
+      - LISTEN_ADDR: ":8080"
+      - NOMIC_URL: "http://127.0.0.1:8302"
+      - QWEN_URL: "http://127.0.0.1:8505"
+      - WHISPER_URL: "http://127.0.0.1:8203"
+      - VOXTRAL_URL: "http://127.0.0.1:8402"
+      - DOCLING_URL: "http://127.0.0.1:5001"
+
+  - name: "nomic-embed-text"
+    image: "ghcr.io/huggingface/text-embeddings-inference@sha256:db9d1d894dbd48a16d9c5f8c74011ccc8d124c35754ca7857ff7a99da6751892" # hopper-latest
+    runtime: nvidia
+    gpus: all
+    env:
+      - HUGGINGFACE_HUB_CACHE: "/tinfoil/cache/nomic-tei"
+    command: [
+      "--model-id", "nomic-ai/nomic-embed-text-v1.5",
+      "--revision", "e5cf08aadaa33385f5990def41f7a23405aec398",
+      "--served-model-name", "nomic-embed-text",
+      "--port", "8302",
+      "--json-output"
+    ]
+
+  - name: "docling"
+    image: "ghcr.io/docling-project/docling-serve-cu130@sha256:4e818629e4f684aeb302532feb6a42e5403e4cbb006b9fccac569a459e16dc6a" # v1.13.1
+    runtime: nvidia
+    gpus: all
+    env:
+      - DOCLING_SERVE_ARTIFACTS_PATH: "/tinfoil/cache/docling/models"
+
+  - name: "voxtral-mini-realtime"
+    image: "ghcr.io/tinfoilsh/vllm-openai-audio@sha256:79ad92b15a7ad72a123321309260389eab51db4b3faeaa94c6313b176ad3f30c" # v0.0.12
+    runtime: nvidia
+    gpus: all
+    env:
+      - PROXY_PORT: "8402"
+      - HF_HOME: "/tinfoil/cache/voxtral-mini-realtime"
+    command: [
+      "--model", "mistralai/Voxtral-Mini-4B-Realtime-2602",
+      "--tokenizer-mode", "mistral",
+      "--config-format", "mistral",
+      "--load-format", "mistral",
+      "--trust-remote-code",
+      "--compilation-config", "{\"cudagraph_mode\":\"PIECEWISE\"}",
+      "--tensor-parallel-size", "1",
+      "--max-model-len", "45000",
+      "--max-num-batched-tokens", "8192",
+      "--max-num-seqs", "16",
+      "--gpu-memory-utilization", "0.20",
+      "--port", "8401",
+      "--host", "0.0.0.0"
+    ]
+
+  - name: "whisper-large-v3-turbo"
+    image: "ghcr.io/tinfoilsh/vllm-openai-audio@sha256:79ad92b15a7ad72a123321309260389eab51db4b3faeaa94c6313b176ad3f30c" # v0.0.12
+    runtime: nvidia
+    gpus: all
+    ipc: host
+    env:
+      - PROXY_PORT: "8203"
+      - HF_HOME: "/tinfoil/cache/whisper"
+    command: [
+      "--model", "openai/whisper-large-v3-turbo",
+      "--revision", "41f01f3fe87f28c78e2fbf8b568835947dd65ed9",
+      "--served-model-name", "whisper-large-v3-turbo",
+      "--port", "8207",
+      "--gpu-memory-utilization", "0.05"
+    ]
+
+  - name: "qwen3-tts"
+    image: "ghcr.io/tinfoilsh/vllm-omni@sha256:9849fceabd24d453cba10b7d16983e0149d30600c8c8dd00d1441e063e785270" # v0.17.0rc1-tinfoil.1
+    runtime: nvidia
+    gpus: all
+    ipc: host
+    env:
+      - HF_HOME: "/tinfoil/cache/qwen-v017"
+      - LD_LIBRARY_PATH: "/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
+    command: [
+      "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+      "--revision", "0c0e3051f131929182e2c023b9537f8b1c68adfe",
+      "--stage-configs-path", "/opt/vllm-omni/vllm_omni/model_executor/stage_configs/qwen3_tts.yaml",
+      "--port", "8505",
+      "--host", "0.0.0.0",
+      "--trust-remote-code",
+      "--served-model-name", "qwen3-tts"
+    ]
+
+shim:
+  listen-port: 443
+  upstream-port: 8080
+  authenticated: true
+  authenticated-endpoints:
+    - /v1/embeddings
+    - /v1/audio/speech
+    - /v1/audio/transcriptions
+    - /v1/realtime
+    - /v1/convert/source
+  paths:
+    - /health
+    - /health/router
+    - /health/nomic
+    - /health/qwen
+    - /health/whisper
+    - /health/voxtral
+    - /health/docling
+    - /metrics/nomic
+    - /metrics/qwen
+    - /metrics/whisper
+    - /metrics/voxtral
+    - /v1/embeddings
+    - /v1/audio/speech
+    - /v1/audio/transcriptions
+    - /v1/realtime
+    - /v1/convert/source
+    - /openapi-3.0.json
+    - /version
