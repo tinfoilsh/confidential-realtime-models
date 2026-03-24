@@ -1,4 +1,4 @@
-name: Container Build and Release
+name: 'Tinfoil Container Release - Stage 1'
 
 on:
   workflow_dispatch:
@@ -23,6 +23,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+
+      - name: Check if version tag already exists
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if git ls-remote --tags origin "refs/tags/$VERSION" | grep -q .; then
+            echo "::error::Tag $VERSION already exists"
+            exit 1
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
@@ -57,7 +66,7 @@ jobs:
           build-args: |
             VERSION=${{ inputs.version }}
 
-  tinfoil-release:
+  config-update-and-tag:
     needs: docker-build
     runs-on: ubuntu-latest
     permissions:
@@ -67,17 +76,16 @@ jobs:
 
     steps:
       - name: Update tinfoil-config.yml and create tag
-        uses: tinfoilsh/container-release-action@3df6b873c966ab1adfd0c4eb513634c5d296000a # dev version
+        uses: tinfoilsh/update-container-action@329555b64fe9685196b91e6598ca06b4647b8821 # v0.3.0
         with:
           version: ${{ inputs.version }}
           digest: ${{ needs.docker-build.outputs.digest }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           base-branch: ${{ github.ref_name }}
 
-      - name: Trigger release action
+      - name: Trigger Tinfoil Container Release Stage 2 action
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ inputs.version }}
         run: |
-          gh workflow run tinfoil-release.yml \
-            --ref "$VERSION"
+          gh workflow run tinfoil-release-2.yml --ref "$VERSION"
