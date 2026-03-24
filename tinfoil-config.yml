@@ -13,7 +13,7 @@ models:
 
 containers:
   - name: "router"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models:latest"
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models@sha256:af9ed22edd47b2f7e19a8fe6077faf053720ce8831ee57b64da5172ffbed794f" # v0.0.1
     env:
       - LISTEN_ADDR: ":8080"
       - QWEN_URL: "http://127.0.0.1:8505"
