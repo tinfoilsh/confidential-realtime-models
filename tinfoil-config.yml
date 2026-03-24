@@ -1,5 +1,5 @@
 cvm-version: 0.7.3
-memory: 65536
+memory: 131072
 cpus: 16
 gpus: 1
 
