@@ -3,6 +3,14 @@ memory: 65536
 cpus: 16
 gpus: 1
 
+models:
+  - name: "qwen3-tts"
+    repo: "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice@0c0e3051f131929182e2c023b9537f8b1c68adfe"
+    mpk: "6d350aa3684da02b2f59157fc11b7c5ea487fa265e98ca1c1dd74cf31ac2fa7e_4520226816_7dc41474-aac5-50bd-bcd5-ffff26ccad57"
+  - name: "voxtral-mini-4b-realtime"
+    repo: "mistralai/Voxtral-Mini-4B-Realtime-2602@2769294da9567371363522aac9bbcfdd19447add"
+    mpk: "b451a321f0da47d9a1d582d3fc46a0ef981de7617aa9e542b8252face85d8bb2_17733844992_af6fc86c-43cf-534e-bb79-9fcfb7403a17"
+
 containers:
   - name: "router"
     image: "ghcr.io/tinfoilsh/confidential-realtime-models:latest"
@@ -11,45 +19,37 @@ containers:
       - QWEN_URL: "http://127.0.0.1:8505"
       - VOXTRAL_URL: "http://127.0.0.1:8402"
 
-  - name: "voxtral-mini-realtime"
+  - name: "voxtral-mini-4b-realtime"
     image: "ghcr.io/tinfoilsh/vllm-openai-audio@sha256:79ad92b15a7ad72a123321309260389eab51db4b3faeaa94c6313b176ad3f30c" # v0.0.12
     runtime: nvidia
     gpus: all
     env:
       - PROXY_PORT: "8402"
-      - HF_HOME: "/tinfoil/cache/voxtral-mini-realtime"
     command: [
-      "--model", "mistralai/Voxtral-Mini-4B-Realtime-2602",
+      "--model", "/tinfoil/mpk/mpk-b451a321f0da47d9a1d582d3fc46a0ef981de7617aa9e542b8252face85d8bb2",
+      "--served-model-name", "voxtral-mini-4b-realtime",
       "--tokenizer-mode", "mistral",
       "--config-format", "mistral",
       "--load-format", "mistral",
       "--trust-remote-code",
       "--compilation-config", "{\"cudagraph_mode\":\"PIECEWISE\"}",
       "--tensor-parallel-size", "1",
-      "--max-model-len", "45000",
+      "--max-model-len", "16000",
       "--max-num-batched-tokens", "8192",
       "--max-num-seqs", "16",
-      "--gpu-memory-utilization", "0.20",
+      "--gpu-memory-utilization", "0.35",
       "--port", "8401",
       "--host", "0.0.0.0"
     ]
 
   - name: "qwen3-tts"
-    image: "ghcr.io/tinfoilsh/vllm-omni@sha256:9849fceabd24d453cba10b7d16983e0149d30600c8c8dd00d1441e063e785270" # v0.17.0rc1-tinfoil.1
+    image: "ghcr.io/tinfoilsh/vllm-omni@sha256:3d17ff8c2eb36311388dee491324c6c98743e744345922e89b1cc32077e25f1b" # v0.17.0rc1-tinfoil.2
     runtime: nvidia
     gpus: all
     ipc: host
-    env:
-      - HF_HOME: "/tinfoil/cache/qwen-v017"
-      - LD_LIBRARY_PATH: "/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
+    entrypoint: ["/bin/sh", "-c"]
     command: [
-      "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
-      "--revision", "0c0e3051f131929182e2c023b9537f8b1c68adfe",
-      "--stage-configs-path", "/opt/vllm-omni/vllm_omni/model_executor/stage_configs/qwen3_tts.yaml",
-      "--port", "8505",
-      "--host", "0.0.0.0",
-      "--trust-remote-code",
-      "--served-model-name", "qwen3-tts"
+      "ln -s /tinfoil/mpk/mpk-6d350aa3684da02b2f59157fc11b7c5ea487fa265e98ca1c1dd74cf31ac2fa7e /tmp/model-CustomVoice && exec /app/entrypoint.sh /tmp/model-CustomVoice --stage-configs-path /opt/vllm-omni/configs/qwen3_tts_realtime.yaml --port 8505 --host 0.0.0.0 --trust-remote-code --served-model-name qwen3-tts"
     ]
 
 shim:
