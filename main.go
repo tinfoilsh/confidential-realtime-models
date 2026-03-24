@@ -23,21 +23,15 @@ type route struct {
 
 type config struct {
 	listenAddr string
-	nomicURL   string
 	qwenURL    string
-	whisperURL string
 	voxtralURL string
-	doclingURL string
 }
 
 func main() {
 	cfg := config{
 		listenAddr: getenvDefault("LISTEN_ADDR", ":8080"),
-		nomicURL:   getenvDefault("NOMIC_URL", "http://127.0.0.1:8302"),
 		qwenURL:    getenvDefault("QWEN_URL", "http://127.0.0.1:8505"),
-		whisperURL: getenvDefault("WHISPER_URL", "http://127.0.0.1:8203"),
 		voxtralURL: getenvDefault("VOXTRAL_URL", "http://127.0.0.1:8402"),
-		doclingURL: getenvDefault("DOCLING_URL", "http://127.0.0.1:8600"),
 	}
 
 	handler, err := newHandler(cfg)
@@ -52,11 +46,8 @@ func main() {
 	}
 
 	log.Printf("starting realtime router on %s", cfg.listenAddr)
-	log.Printf("routing /v1/embeddings -> %s", cfg.nomicURL)
 	log.Printf("routing /v1/audio/speech -> %s", cfg.qwenURL)
-	log.Printf("routing /v1/audio/transcriptions -> %s", cfg.whisperURL)
 	log.Printf("routing /v1/realtime -> %s", cfg.voxtralURL)
-	log.Printf("routing docling app paths -> %s", cfg.doclingURL)
 
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("server failed: %v", err)
@@ -111,21 +102,11 @@ func buildRoutes(cfg config) ([]route, error) {
 		rawURL      string
 		targetPath  string
 	}{
-		{name: "nomic", pattern: "/v1/embeddings", rawURL: cfg.nomicURL},
 		{name: "qwen", pattern: "/v1/audio/speech", rawURL: cfg.qwenURL},
-		{name: "whisper", pattern: "/v1/audio/transcriptions", rawURL: cfg.whisperURL},
 		{name: "voxtral", pattern: "/v1/realtime", rawURL: cfg.voxtralURL},
-		{name: "docling", pattern: "/v1/convert/", rawURL: cfg.doclingURL},
-		{name: "docling", pattern: "/openapi-3.0.json", exact: true, rawURL: cfg.doclingURL},
-		{name: "docling", pattern: "/version", exact: true, rawURL: cfg.doclingURL},
-		{name: "nomic-health", pattern: "/health/nomic", exact: true, rawURL: cfg.nomicURL, targetPath: "/health"},
 		{name: "qwen-health", pattern: "/health/qwen", exact: true, rawURL: cfg.qwenURL, targetPath: "/health"},
-		{name: "whisper-health", pattern: "/health/whisper", exact: true, rawURL: cfg.whisperURL, targetPath: "/health"},
 		{name: "voxtral-health", pattern: "/health/voxtral", exact: true, rawURL: cfg.voxtralURL, targetPath: "/health"},
-		{name: "docling-health", pattern: "/health/docling", exact: true, rawURL: cfg.doclingURL, targetPath: "/health"},
-		{name: "nomic-metrics", pattern: "/metrics/nomic", exact: true, rawURL: cfg.nomicURL, targetPath: "/metrics"},
 		{name: "qwen-metrics", pattern: "/metrics/qwen", exact: true, rawURL: cfg.qwenURL, targetPath: "/metrics"},
-		{name: "whisper-metrics", pattern: "/metrics/whisper", exact: true, rawURL: cfg.whisperURL, targetPath: "/metrics"},
 		{name: "voxtral-metrics", pattern: "/metrics/voxtral", exact: true, rawURL: cfg.voxtralURL, targetPath: "/metrics"},
 	}
 
