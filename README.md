@@ -4,9 +4,7 @@ A tiny in-enclave reverse proxy for the collocated realtime stack.
 
 It routes fixed API paths to the validated local model ports:
 
-- `/v1/embeddings` -> `nomic`
 - `/v1/audio/speech` -> `qwen3-tts`
-- `/v1/audio/transcriptions` -> `whisper`
 - `/v1/realtime` -> `voxtral-mini-realtime`
 
 ## Configuration
@@ -14,9 +12,7 @@ It routes fixed API paths to the validated local model ports:
 Environment variables:
 
 - `LISTEN_ADDR` default `:8080`
-- `NOMIC_URL` default `http://127.0.0.1:8302`
 - `QWEN_URL` default `http://127.0.0.1:8505`
-- `WHISPER_URL` default `http://127.0.0.1:8203`
 - `VOXTRAL_URL` default `http://127.0.0.1:8402`
 
 ## Local build
