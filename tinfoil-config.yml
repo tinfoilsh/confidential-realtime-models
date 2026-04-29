@@ -7,20 +7,33 @@ models:
   - name: "qwen3-tts"
     repo: "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice@0c0e3051f131929182e2c023b9537f8b1c68adfe"
     mpk: "6d350aa3684da02b2f59157fc11b7c5ea487fa265e98ca1c1dd74cf31ac2fa7e_4520226816_7dc41474-aac5-50bd-bcd5-ffff26ccad57"
+  - name: "voxtral-tts"
+    repo: "mistralai/Voxtral-4B-TTS-2603@b81be46c3777f88621676791b512bb01dc1cb970"
+    mpk: "8f7b7407c2bd621160a89d5c3ed845baecd2912850aceca2ad264f06442f471b_8037642240_6b9c8976-212b-5927-b9ff-945a64178b46"
   - name: "voxtral-mini-4b-realtime"
     repo: "mistralai/Voxtral-Mini-4B-Realtime-2602@2769294da9567371363522aac9bbcfdd19447add"
     mpk: "b451a321f0da47d9a1d582d3fc46a0ef981de7617aa9e542b8252face85d8bb2_17733844992_af6fc86c-43cf-534e-bb79-9fcfb7403a17"
 
 containers:
+  # Subdomain-routing reverse proxy. Dispatches by leftmost label of the host:
+  #   qwen3-tts.<domain>                -> qwen3-tts container (port 8505)
+  #   voxtral-tts.<domain>              -> voxtral-tts container (port 8605)
+  #   voxtral-mini-4b-realtime.<domain> -> voxtral-mini-realtime container (port 8402)
   - name: "router"
     image: "ghcr.io/tinfoilsh/confidential-realtime-models@sha256:7a3685ddbfee41dacc2741a57bab2df9853df5b36b68508ad5bca1a9dfddbc64" # v0.0.2
     env:
       - LISTEN_ADDR: ":8080"
-      - QWEN_URL: "http://127.0.0.1:8505"
-      - VOXTRAL_URL: "http://127.0.0.1:8402"
+      - DOMAIN: "realtime.tinfoil.sh"
+      - QWEN_TTS_URL: "http://127.0.0.1:8505"
+      - VOXTRAL_TTS_URL: "http://127.0.0.1:8605"
+      - VOXTRAL_MINI_REALTIME_URL: "http://127.0.0.1:8402"
 
+  # Voxtral-Mini realtime STT. The audio image is a thin layer on top of
+  # vllm/vllm-openai:v0.20.0 that adds a FastAPI proxy fixing the realtime
+  # WebSocket subprotocol-echo bug (otherwise Chrome closes 1006 — see
+  # audio/audio_proxy.py header for the full story).
   - name: "voxtral-mini-4b-realtime"
-    image: "ghcr.io/tinfoilsh/vllm-openai-audio@sha256:79ad92b15a7ad72a123321309260389eab51db4b3faeaa94c6313b176ad3f30c" # v0.0.12
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-audio@sha256:0000000000000000000000000000000000000000000000000000000000000000" # v0.0.0 — placeholder until first build
     runtime: nvidia
     gpus: all
     env:
@@ -37,19 +50,39 @@ containers:
       "--max-model-len", "16000",
       "--max-num-batched-tokens", "8192",
       "--max-num-seqs", "16",
-      "--gpu-memory-utilization", "0.35",
+      "--gpu-memory-utilization", "0.45",
       "--port", "8401",
       "--host", "0.0.0.0"
     ]
 
+  # Qwen3-TTS via the omni image (upstream vllm-omni v0.18.0 + our trimmed
+  # stage configs at /opt/realtime-configs/). Replaces the deprecated tinfoil
+  # fork at ghcr.io/tinfoilsh/vllm-omni v0.17.0rc1-tinfoil.2.
   - name: "qwen3-tts"
-    image: "ghcr.io/tinfoilsh/vllm-omni@sha256:3d17ff8c2eb36311388dee491324c6c98743e744345922e89b1cc32077e25f1b" # v0.17.0rc1-tinfoil.2
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000" # v0.0.0 — placeholder until first build
     runtime: nvidia
     gpus: all
     ipc: host
     entrypoint: ["/bin/sh", "-c"]
+    env:
+      - LD_LIBRARY_PATH: "/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
     command: [
-      "ln -s /tinfoil/mpk/mpk-6d350aa3684da02b2f59157fc11b7c5ea487fa265e98ca1c1dd74cf31ac2fa7e /tmp/model-CustomVoice && exec /app/entrypoint.sh /tmp/model-CustomVoice --stage-configs-path /opt/vllm-omni/configs/qwen3_tts_realtime.yaml --port 8505 --host 0.0.0.0 --trust-remote-code --served-model-name qwen3-tts"
+      "ln -s /tinfoil/mpk/mpk-6d350aa3684da02b2f59157fc11b7c5ea487fa265e98ca1c1dd74cf31ac2fa7e /tmp/model-CustomVoice && exec vllm serve /tmp/model-CustomVoice --stage-configs-path /opt/realtime-configs/qwen3_tts_realtime.yaml --port 8505 --host 0.0.0.0 --trust-remote-code --enforce-eager --omni --served-model-name qwen3-tts"
+    ]
+
+  # Voxtral-TTS via the same omni image with its own trimmed stage config.
+  # Mistral-format model; preset voices include cheerful_female, casual_male,
+  # neutral_female, etc. (see /v1/audio/voices for the full list).
+  - name: "voxtral-tts"
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000" # v0.0.0 — placeholder until first build
+    runtime: nvidia
+    gpus: all
+    ipc: host
+    entrypoint: ["/bin/sh", "-c"]
+    env:
+      - LD_LIBRARY_PATH: "/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
+    command: [
+      "ln -s /tinfoil/mpk/mpk-8f7b7407c2bd621160a89d5c3ed845baecd2912850aceca2ad264f06442f471b /tmp/model-VoxtralTTS && exec vllm serve /tmp/model-VoxtralTTS --stage-configs-path /opt/realtime-configs/voxtral_tts_realtime.yaml --port 8605 --host 0.0.0.0 --trust-remote-code --enforce-eager --omni --tokenizer-mode mistral --config-format mistral --load-format mistral --served-model-name voxtral-tts"
     ]
 
 shim:
@@ -61,10 +94,5 @@ shim:
     - /v1/realtime
   paths:
     - /health
-    - /health/router
-    - /health/qwen
-    - /health/voxtral
-    - /metrics/qwen
-    - /metrics/voxtral
     - /v1/audio/speech
     - /v1/realtime
