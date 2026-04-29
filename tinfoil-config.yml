@@ -62,7 +62,7 @@ containers:
       "--max-model-len", "16000",
       "--max-num-batched-tokens", "8192",
       "--max-num-seqs", "16",
-      "--gpu-memory-utilization", "0.45",
+      "--kv-cache-memory-bytes", "17179869184",
       "--port", "8401",
       "--host", "0.0.0.0"
     ]

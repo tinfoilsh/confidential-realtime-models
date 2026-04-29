@@ -16,7 +16,16 @@ stage_args:
       async_scheduling: true
       enable_prefix_caching: false
       engine_output_type: latent
-      gpu_memory_utilization: 0.20
+      # Absolute KV cache size makes startup deterministic regardless of which
+      # other engines have already grabbed memory. 4 GiB covers max_model_len
+      # of 4096 with substantial headroom (measured: 18.27 GiB at gmu=0.20 was
+      # massive over-provisioning -- 171k tokens vs 4k needed).
+      # gpu_memory_utilization is kept low because the omni stage engine still
+      # runs request_memory() against it before the kv_cache_memory_bytes path
+      # takes over (only the bare-vllm CLI fully bypasses gmu). 0.10 of 144 GiB
+      # = 14.4 GiB cap, comfortably above model (3.6) + KV (4) + activations.
+      gpu_memory_utilization: 0.10
+      kv_cache_memory_bytes: 4294967296   # 4 GiB
       distributed_executor_backend: "mp"
       max_num_batched_tokens: 512
       max_model_len: 4096
@@ -48,7 +57,11 @@ stage_args:
       async_scheduling: true
       enable_prefix_caching: false
       engine_output_type: audio
-      gpu_memory_utilization: 0.20
+      # 2 GiB KV — code2wav stage (max_num_seqs: 1, max_model_len: 32768),
+      # ample for streaming codec windows. gmu kept low for the request_memory
+      # admission check (see stage 0 comment).
+      gpu_memory_utilization: 0.05
+      kv_cache_memory_bytes: 2147483648   # 2 GiB
       distributed_executor_backend: "mp"
       # Must be divisible by num_code_groups and cover (left_context + chunk).
       max_num_batched_tokens: 8192
