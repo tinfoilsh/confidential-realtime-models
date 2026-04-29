@@ -12,7 +12,14 @@ stage_args:
       worker_type: ar
       worker_cls: vllm_omni.worker.gpu_ar_worker.GPUARWorker
       scheduler_cls: vllm_omni.core.sched.omni_ar_scheduler.OmniARScheduler
-      gpu_memory_utilization: 0.15
+      # Absolute KV cache size makes startup deterministic regardless of
+      # other engines' allocation order. Measured 3.89 GiB at gmu=0.15 worked;
+      # 4 GiB gives small headroom for max_model_len=4096 with 32 seqs.
+      # gmu kept low (0.12 = ~17 GiB cap) for the request_memory admission
+      # check that the omni stage engine still runs even when
+      # kv_cache_memory_bytes is set; covers model (7.82) + KV (4) + activations.
+      gpu_memory_utilization: 0.12
+      kv_cache_memory_bytes: 4294967296   # 4 GiB
       enforce_eager: false
       trust_remote_code: true
       async_scheduling: true
@@ -51,7 +58,9 @@ stage_args:
       worker_cls: vllm_omni.worker.gpu_generation_worker.GPUGenerationWorker
       scheduler_cls: vllm_omni.core.sched.omni_generation_scheduler.OmniGenerationScheduler
       async_scheduling: false
+      # 2 GiB for the audio_tokenizer stage (max_num_seqs: 32, runs eager).
       gpu_memory_utilization: 0.05
+      kv_cache_memory_bytes: 2147483648   # 2 GiB
       enforce_eager: true
       trust_remote_code: true
       enable_prefix_caching: false
