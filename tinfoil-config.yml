@@ -21,12 +21,18 @@ containers:
   #   voxtral-mini-4b-realtime.<domain> -> voxtral-mini-realtime container (port 8402)
   - name: "router"
     image: "ghcr.io/tinfoilsh/confidential-realtime-models@sha256:7a3685ddbfee41dacc2741a57bab2df9853df5b36b68508ad5bca1a9dfddbc64" # v0.0.2
+    restart: always
     env:
       - LISTEN_ADDR: ":8080"
       - DOMAIN
       - QWEN_TTS_URL: "http://127.0.0.1:8505"
       - VOXTRAL_TTS_URL: "http://127.0.0.1:8605"
       - VOXTRAL_MINI_REALTIME_URL: "http://127.0.0.1:8402"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 1m
 
   # Voxtral-Mini realtime STT. The audio image is a thin layer on top of
   # vllm/vllm-openai:v0.20.0 that adds a FastAPI proxy fixing the realtime
@@ -36,8 +42,14 @@ containers:
     image: "ghcr.io/tinfoilsh/confidential-realtime-models-audio@sha256:0000000000000000000000000000000000000000000000000000000000000000" # v0.0.0 — placeholder until first build
     runtime: nvidia
     gpus: all
+    restart: always
     env:
       - PROXY_PORT: "8402"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8402/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5m
     command: [
       "--model", "/tinfoil/mpk/mpk-b451a321f0da47d9a1d582d3fc46a0ef981de7617aa9e542b8252face85d8bb2",
       "--served-model-name", "voxtral-mini-4b-realtime",
@@ -63,7 +75,13 @@ containers:
     runtime: nvidia
     gpus: all
     ipc: host
+    restart: always
     entrypoint: ["/bin/sh", "-c"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8505/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5m
     command: [
       "ln -s /tinfoil/mpk/mpk-6d350aa3684da02b2f59157fc11b7c5ea487fa265e98ca1c1dd74cf31ac2fa7e /tmp/model-CustomVoice && exec vllm serve /tmp/model-CustomVoice --stage-configs-path /opt/realtime-configs/qwen3_tts_realtime.yaml --port 8505 --host 0.0.0.0 --trust-remote-code --enforce-eager --omni --served-model-name qwen3-tts"
     ]
@@ -77,7 +95,13 @@ containers:
     runtime: nvidia
     gpus: all
     ipc: host
+    restart: always
     entrypoint: ["/bin/sh", "-c"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8605/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5m
     command: [
       "ln -s /tinfoil/mpk/mpk-8f7b7407c2bd621160a89d5c3ed845baecd2912850aceca2ad264f06442f471b /tmp/model-VoxtralTTS && exec vllm serve /tmp/model-VoxtralTTS --stage-configs-path /opt/realtime-configs/voxtral_tts_realtime.yaml --port 8605 --host 0.0.0.0 --trust-remote-code --enforce-eager --omni --tokenizer-mode mistral --config-format mistral --load-format mistral --served-model-name voxtral-tts"
     ]
