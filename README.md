@@ -37,11 +37,10 @@ via `DOMAIN` (default `realtime.tinfoil.sh`):
 
 The router prefers `X-Forwarded-Host` over `Host`, so the shim can terminate
 TLS for `*.realtime.tinfoil.sh` and forward plain HTTP without the router
-having to understand TLS.
-
-> Deployment requirement: the shim needs a wildcard TLS certificate for
-> `*.realtime.tinfoil.sh`. Reusing a single-host cert for the apex domain
-> won't work — Chrome will reject the subdomain handshake.
+having to understand TLS. The wildcard cert is provisioned by the shim via
+`tls-wildcard: true` in `tinfoil-config.yml`. `DOMAIN` itself is read from
+`external-config.yml` (matching the model-router pattern), so the same image
+works for staging and prod.
 
 ## Containers
 
