@@ -1,4 +1,4 @@
-name: 'Tinfoil Container Release - Stage 2'
+name: 'Tinfoil Container Release'
 
 on:
   workflow_dispatch:
