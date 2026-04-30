@@ -107,7 +107,7 @@ func newHandler(cfg config) (http.Handler, error) {
 
 		b, ok := backends[modelName]
 		if !ok {
-			log.Printf("unknown model subdomain %q (host=%q)", modelName, hostHeader(r))
+			log.Printf("unknown model subdomain %q (host=%q)", modelName, r.Header.Get("X-Forwarded-Host"))
 			http.Error(w, fmt.Sprintf("unknown model: %s", modelName), http.StatusNotFound)
 			return
 		}
@@ -142,6 +142,7 @@ func buildBackends(cfg config) (map[string]*backend, error) {
 			director(req)
 			req.Host = target.Host
 		}
+		proxy.ModifyResponse = fixRealtimeSubprotocolEcho
 		proxy.ErrorLog = log.New(os.Stderr, fmt.Sprintf("%s proxy: ", spec.name), log.LstdFlags)
 		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 			log.Printf("proxy error for %s %s via %s: %v", r.Method, r.URL.Path, spec.name, err)
@@ -158,15 +159,15 @@ func buildBackends(cfg config) (map[string]*backend, error) {
 	return backends, nil
 }
 
-// parseModelFromSubdomain returns the leftmost label of r's host header when
-// the host is a strict subdomain of `domain`. Returns "" when the host equals
-// `domain` itself, when the host doesn't end in `.domain`, or when the
-// leftmost label is empty.
-//
-// We trust X-Forwarded-Host first (the shim terminates TLS and forwards
-// plain HTTP) and fall back to r.Host for direct (non-shim) connections.
+// parseModelFromSubdomain returns the leftmost label of the X-Forwarded-Host
+// header when the host is a strict subdomain of `domain`. Returns "" when:
+//   - the header is missing (we trust only what the shim hands us; there's
+//     no fallback to r.Host since this router is meant to sit behind the shim)
+//   - the host equals `domain` itself (apex)
+//   - the host doesn't end in `.domain`
+//   - the leftmost label is empty
 func parseModelFromSubdomain(r *http.Request, domain string) string {
-	host := hostHeader(r)
+	host := r.Header.Get("X-Forwarded-Host")
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}
@@ -187,16 +188,76 @@ func parseModelFromSubdomain(r *http.Request, domain string) string {
 	return parts[0]
 }
 
-func hostHeader(r *http.Request) string {
-	if h := r.Header.Get("X-Forwarded-Host"); h != "" {
-		return h
-	}
-	return r.Host
-}
-
 func getenvDefault(key, fallback string) string {
 	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 		return value
 	}
 	return fallback
+}
+
+// Subprotocols that carry credentials and must never be echoed back to the
+// client. RFC 6455 echoes go in plaintext response headers, so reflecting
+// `openai-insecure-api-key.<KEY>` would leak the key to any TLS-terminating
+// intermediary.
+var sensitiveSubprotocolPrefixes = []string{
+	"openai-insecure-api-key.",
+	"openai-organization.",
+	"openai-project.",
+}
+
+// fixRealtimeSubprotocolEcho rewrites the Sec-WebSocket-Protocol header on
+// 101 Switching Protocols responses so vLLM's native /v1/realtime handler
+// becomes Chrome- and Firefox-compatible.
+func fixRealtimeSubprotocolEcho(resp *http.Response) error {
+	if resp.StatusCode != http.StatusSwitchingProtocols || resp.Request == nil {
+		return nil
+	}
+	offered := parseSubprotocols(resp.Request.Header.Values("Sec-WebSocket-Protocol"))
+	if chosen := pickRealtimeSubprotocol(offered); chosen != "" {
+		resp.Header.Set("Sec-WebSocket-Protocol", chosen)
+	} else {
+		resp.Header.Del("Sec-WebSocket-Protocol")
+	}
+	return nil
+}
+
+func parseSubprotocols(headerValues []string) []string {
+	var out []string
+	for _, v := range headerValues {
+		for _, p := range strings.Split(v, ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				out = append(out, p)
+			}
+		}
+	}
+	return out
+}
+
+// pickRealtimeSubprotocol picks a single subprotocol to echo back, preferring
+// "realtime" and never reflecting credential-bearing tokens. Returns "" when
+// nothing is safe to echo (in which case Sec-WebSocket-Protocol is dropped
+// from the response, matching the offer-nothing case in RFC 6455).
+func pickRealtimeSubprotocol(offered []string) string {
+	var safe []string
+	for _, p := range offered {
+		sensitive := false
+		for _, prefix := range sensitiveSubprotocolPrefixes {
+			if strings.HasPrefix(p, prefix) {
+				sensitive = true
+				break
+			}
+		}
+		if !sensitive {
+			safe = append(safe, p)
+		}
+	}
+	for _, p := range safe {
+		if p == "realtime" {
+			return "realtime"
+		}
+	}
+	if len(safe) > 0 {
+		return safe[0]
+	}
+	return ""
 }

@@ -156,31 +156,22 @@ func TestForeignDomainServesOnlyHealth(t *testing.T) {
 	}
 }
 
-// --- X-Forwarded-Host takes precedence over Host ---
+// --- request without X-Forwarded-Host is rejected ---
 
-func TestXForwardedHostWins(t *testing.T) {
-	var gotPath string
-	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotPath = r.URL.Path
-		_, _ = w.Write([]byte(`{"ok":true}`))
-	}))
-	defer backend.Close()
+// The router strictly requires X-Forwarded-Host (set by the shim). A request
+// that arrives without it cannot be dispatched and we don't fall back to
+// req.Host, so it lands in the same "no subdomain extracted" path as the
+// apex domain: only /health is exposed.
+func TestRequestWithoutXForwardedHostHasNoBackend(t *testing.T) {
+	handler := newTestHandler(t)
 
-	handler := newTestHandlerWith(t, "qwen", backend.URL)
-	// Direct Host points at root domain (would be a 404), but the shim
-	// forwarded the original `qwen3-tts.realtime.tinfoil.sh` upstream.
-	req := newReq(http.MethodPost, "/v1/audio/speech", strings.NewReader(`{"model":"qwen3-tts"}`), testDomain)
-	req.Header.Set("X-Forwarded-Host", "qwen3-tts."+testDomain)
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest(http.MethodPost, "/v1/audio/speech", strings.NewReader(`{}`))
+	req.Host = "qwen3-tts." + testDomain // would dispatch if we trusted it
 	rec := httptest.NewRecorder()
-
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 via X-Forwarded-Host, got %d", rec.Code)
-	}
-	if gotPath != "/v1/audio/speech" {
-		t.Fatalf("unexpected backend path %q", gotPath)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 without X-Forwarded-Host, got %d", rec.Code)
 	}
 }
 
@@ -210,59 +201,92 @@ func TestProxyPreservesQueryString(t *testing.T) {
 	}
 }
 
-// --- WebSocket realtime upgrade ---
+// --- WebSocket realtime upgrade (with subprotocol-echo fix) ---
 
-func TestWebSocketRealtimeProxy(t *testing.T) {
-	upgrader := websocket.Upgrader{
-		Subprotocols:    []string{"realtime"},
-		CheckOrigin:     func(r *http.Request) bool { return true },
-	}
+// brokenVLLMUpgrader simulates vLLM's bug: accepts the upgrade but never echoes
+// the client's offered subprotocols, the way websocket.accept() does without
+// a subprotocol arg in vllm/entrypoints/openai/realtime/connection.py.
+var brokenVLLMUpgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
+
+func TestWebSocketRealtimeProxyEchoesSubprotocol(t *testing.T) {
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/realtime" {
-			http.NotFound(w, r)
-			return
-		}
-		conn, err := upgrader.Upgrade(w, r, nil)
+		conn, err := brokenVLLMUpgrader.Upgrade(w, r, nil)
 		if err != nil {
-			t.Fatalf("upgrade backend websocket: %v", err)
+			t.Fatalf("upgrade: %v", err)
 		}
 		defer conn.Close()
-
-		mt, msg, err := conn.ReadMessage()
-		if err != nil {
-			t.Fatalf("read backend websocket: %v", err)
-		}
+		mt, msg, _ := conn.ReadMessage()
 		_ = conn.WriteMessage(mt, append([]byte("echo:"), msg...))
 	}))
 	defer backend.Close()
 
-	handler := newTestHandlerWith(t, "voxtral_mini", backend.URL)
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// gorilla's dialer sets r.Host to the proxy's address, so inject
-		// X-Forwarded-Host to simulate the shim handing us the original Host.
 		r.Header.Set("X-Forwarded-Host", "voxtral-mini-4b-realtime."+testDomain)
-		handler.ServeHTTP(w, r)
+		newTestHandlerWith(t, "voxtral_mini", backend.URL).ServeHTTP(w, r)
 	}))
 	defer proxy.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(proxy.URL, "http") + "/v1/realtime"
-	dialer := websocket.DefaultDialer
-	dialer.Subprotocols = []string{"realtime"}
-	conn, _, err := dialer.Dial(wsURL, nil)
+
+	// Browser-style offer: real subprotocol + auth-bearing one. The router
+	// must echo "realtime" and drop the api-key on the way back.
+	dialer := *websocket.DefaultDialer
+	dialer.Subprotocols = []string{"realtime", "openai-insecure-api-key.fake-token"}
+	conn, resp, err := dialer.Dial(wsURL, nil)
 	if err != nil {
-		t.Fatalf("dial proxy websocket: %v", err)
+		t.Fatalf("dial: %v", err)
 	}
 	defer conn.Close()
 
+	if got := resp.Header.Get("Sec-WebSocket-Protocol"); got != "realtime" {
+		t.Fatalf("expected Sec-WebSocket-Protocol: realtime, got %q", got)
+	}
+
 	if err := conn.WriteMessage(websocket.TextMessage, []byte("ping")); err != nil {
-		t.Fatalf("write websocket: %v", err)
+		t.Fatalf("write: %v", err)
 	}
-	_, payload, err := conn.ReadMessage()
-	if err != nil {
-		t.Fatalf("read websocket: %v", err)
+	if _, payload, err := conn.ReadMessage(); err != nil || string(payload) != "echo:ping" {
+		t.Fatalf("unexpected payload %q (err=%v)", string(payload), err)
 	}
-	if got := string(payload); got != "echo:ping" {
-		t.Fatalf("unexpected websocket payload %q", got)
+}
+
+// --- pickRealtimeSubprotocol unit table ---
+
+func TestPickRealtimeSubprotocol(t *testing.T) {
+	cases := []struct {
+		name    string
+		offered []string
+		want    string
+	}{
+		{"chrome real-world", []string{"realtime", "openai-insecure-api-key.tk_x"}, "realtime"},
+		{"auth-only", []string{"openai-insecure-api-key.tk_x"}, ""},
+		{"empty", []string{}, ""},
+		{"nil", nil, ""},
+		{"non-realtime first then realtime", []string{"foo", "realtime"}, "realtime"},
+		{"only non-realtime", []string{"foo", "bar"}, "foo"},
+		{"openai mixed in", []string{"realtime", "openai-insecure-api-key.tk_x", "openai-organization.org_y", "openai-project.proj_z"}, "realtime"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := pickRealtimeSubprotocol(tc.offered); got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseSubprotocols(t *testing.T) {
+	got := parseSubprotocols([]string{"realtime, openai-insecure-api-key.x", "  ", "foo"})
+	want := []string{"realtime", "openai-insecure-api-key.x", "foo"}
+	if len(got) != len(want) {
+		t.Fatalf("len: got %v, want %v", got, want)
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Fatalf("[%d]: got %q, want %q", i, got[i], want[i])
+		}
 	}
 }
 
@@ -309,10 +333,12 @@ func TestNewHandlerRequiresDomain(t *testing.T) {
 
 // --- helpers ---
 
-// newReq builds an httptest request whose Host header is the given fqdn.
+// newReq builds an httptest request and sets X-Forwarded-Host (matching how
+// the shim hands the original host to the router; the router doesn't trust
+// req.Host in production).
 func newReq(method, path string, body io.Reader, host string) *http.Request {
 	req := httptest.NewRequest(method, path, body)
-	req.Host = host
+	req.Header.Set("X-Forwarded-Host", host)
 	return req
 }
 
