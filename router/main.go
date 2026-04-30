@@ -97,7 +97,7 @@ func newHandler(cfg config) (http.Handler, error) {
 
 		if modelName == "" {
 			// Root domain or other host: only /health is exposed.
-			if r.URL.Path == "/health" || r.URL.Path == "/health/router" {
+			if r.URL.Path == "/health" {
 				healthHandler(w, r)
 				return
 			}
