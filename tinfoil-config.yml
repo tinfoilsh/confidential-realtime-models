@@ -16,7 +16,7 @@ models:
 
 containers:
   - name: "router"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models@sha256:7a3685ddbfee41dacc2741a57bab2df9853df5b36b68508ad5bca1a9dfddbc64" # v0.0.2
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models@sha256:5dd8d015c6a13e69f22feb6870c0405d5f353567402beedaa307433eb062b68c" # v0.0.3
     restart: always
     env:
       - LISTEN_ADDR: ":8080"
@@ -31,7 +31,7 @@ containers:
       start_period: 1m
 
   - name: "voxtral-mini-4b-realtime"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000" # v0.0.0 — placeholder until first build
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:adda317e82dd3734169c9f0fb5b0e97b64a8e3f50cad4262082467f30981b593" # v0.0.3
     runtime: nvidia
     gpus: all
     ipc: host
@@ -61,7 +61,7 @@ containers:
     ]
 
   - name: "qwen3-tts"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000" # v0.0.0 — placeholder until first build
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:adda317e82dd3734169c9f0fb5b0e97b64a8e3f50cad4262082467f30981b593" # v0.0.3
     runtime: nvidia
     gpus: all
     ipc: host
@@ -77,7 +77,7 @@ containers:
     ]
 
   - name: "voxtral-tts"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000" # v0.0.0 — placeholder until first build
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:adda317e82dd3734169c9f0fb5b0e97b64a8e3f50cad4262082467f30981b593" # v0.0.3
     runtime: nvidia
     gpus: all
     ipc: host
