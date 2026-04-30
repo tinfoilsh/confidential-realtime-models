@@ -126,7 +126,7 @@ jobs:
 
     steps:
       - name: Update tinfoil-config.yml and create tag
-        uses: tinfoilsh/update-container-action@dmccanns/multiple-images
+        uses: tinfoilsh/update-container-action@ca44ec9fdfdde8feb1a886940282cdbd7be9bb28
         with:
           image: |
             ghcr.io/tinfoilsh/confidential-realtime-models
