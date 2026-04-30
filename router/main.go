@@ -46,7 +46,7 @@ type config struct {
 func main() {
 	cfg := config{
 		listenAddr:             getenvDefault("LISTEN_ADDR", ":8080"),
-		domain:                 getenvDefault("DOMAIN", "realtime.tinfoil.sh"),
+		domain:                 getenvDefault("DOMAIN", "localhost"),
 		qwenTTSURL:             getenvDefault("QWEN_TTS_URL", "http://127.0.0.1:8505"),
 		voxtralTTSURL:          getenvDefault("VOXTRAL_TTS_URL", "http://127.0.0.1:8605"),
 		voxtralMiniRealtimeURL: getenvDefault("VOXTRAL_MINI_REALTIME_URL", "http://127.0.0.1:8402"),
