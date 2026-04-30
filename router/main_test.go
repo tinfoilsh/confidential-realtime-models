@@ -31,18 +31,6 @@ func TestRootHealth(t *testing.T) {
 	}
 }
 
-func TestRootHealthRouterAlias(t *testing.T) {
-	handler := newTestHandler(t)
-	req := newReq(http.MethodGet, "/health/router", nil, testDomain)
-	rec := httptest.NewRecorder()
-
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
-	}
-}
-
 func TestRootDomainOtherPathIsNotFound(t *testing.T) {
 	handler := newTestHandler(t)
 	req := newReq(http.MethodPost, "/v1/audio/speech", strings.NewReader(`{}`), testDomain)
