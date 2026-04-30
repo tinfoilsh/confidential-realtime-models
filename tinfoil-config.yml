@@ -16,7 +16,7 @@ models:
 
 containers:
   - name: "router"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models@sha256:5dd8d015c6a13e69f22feb6870c0405d5f353567402beedaa307433eb062b68c" # v0.0.3
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models@sha256:3beb9803131fea43a9525b7bf6ae32dc78340d48d93a4cdc6ea59abac13195a4" # v0.0.4
     restart: always
     env:
       - LISTEN_ADDR: ":8080"
@@ -31,7 +31,7 @@ containers:
       start_period: 1m
 
   - name: "voxtral-mini-4b-realtime"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:adda317e82dd3734169c9f0fb5b0e97b64a8e3f50cad4262082467f30981b593" # v0.0.3
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:ad7686ce3c587c77073f7af74fbbfecf969989fc897f66dd1b95935f03bf7bcb" # v0.0.4
     runtime: nvidia
     gpus: all
     ipc: host
@@ -61,7 +61,7 @@ containers:
     ]
 
   - name: "qwen3-tts"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:adda317e82dd3734169c9f0fb5b0e97b64a8e3f50cad4262082467f30981b593" # v0.0.3
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:ad7686ce3c587c77073f7af74fbbfecf969989fc897f66dd1b95935f03bf7bcb" # v0.0.4
     runtime: nvidia
     gpus: all
     ipc: host
@@ -77,7 +77,7 @@ containers:
     ]
 
   - name: "voxtral-tts"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:adda317e82dd3734169c9f0fb5b0e97b64a8e3f50cad4262082467f30981b593" # v0.0.3
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:ad7686ce3c587c77073f7af74fbbfecf969989fc897f66dd1b95935f03bf7bcb" # v0.0.4
     runtime: nvidia
     gpus: all
     ipc: host
