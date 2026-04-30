@@ -1,46 +1,61 @@
 # confidential-realtime-models
 
 Tinfoil enclave that colocates three audio models on a single H200 plus a
-subdomain-routing reverse proxy. Three container images are built from this
+subdomain-routing reverse proxy. Two container images are built from this
 repo in addition to the upstream model packs.
 
 ## Layout
 
 ```
 .
-├── router/                # Go reverse proxy that dispatches by subdomain
-├── audio/                 # FastAPI proxy in front of vLLM /v1/realtime
-│                          # (fixes the WebSocket subprotocol-echo bug that
-│                          #  closes Chromium/Firefox connections with 1006)
-├── omni/                  # Thin layer over vllm/vllm-omni:v0.18.0 that bakes
-│                          # in colocation-friendly stage configs for TTS
+├── router/                # Go reverse proxy: subdomain dispatch + WebSocket
+│                          # subprotocol-echo fix (the only reason vanilla
+│                          # vLLM /v1/realtime closes 1006 in Chromium).
+├── omni/                  # Thin layer over vllm/vllm-omni:v0.18.0 with
+│                          # colocation-friendly stage configs at
+│                          # /opt/realtime-configs/. Used by all three vLLM
+│                          # containers (qwen3-tts, voxtral-tts, voxtral-mini).
 ├── tinfoil-config.yml     # CVM model packs + container manifest
 └── .github/workflows/
-    ├── test.yml           # router go test + audio_proxy syntax/picker tests
-    ├── tinfoil-build.yml  # Multi-image release: builds router + audio + omni,
-    │                      # then update-container-action @ multiple-images
-    │                      # bumps all three digests in tinfoil-config.yml
+    ├── test.yml           # router go vet + go test + go build
+    ├── tinfoil-build.yml  # parallel router + omni build, multi-image release
     └── tinfoil-release.yml # measure-image + attestation publish
 ```
 
 ## Subdomain routing
 
 The router dispatches on the leftmost label of the request's host. Configured
-via `DOMAIN` (default `realtime.tinfoil.sh`):
+via `DOMAIN` (read from `external-config.yml`):
 
 | Subdomain                                         | Backend                          | Port |
 |---------------------------------------------------|----------------------------------|------|
-| `qwen3-tts.realtime.tinfoil.sh`                   | `qwen3-tts` container            | 8505 |
-| `voxtral-tts.realtime.tinfoil.sh`                 | `voxtral-tts` container          | 8605 |
-| `voxtral-mini-4b-realtime.realtime.tinfoil.sh`    | `voxtral-mini-4b-realtime`       | 8402 |
-| `realtime.tinfoil.sh` (root)                      | `/health` only                   | n/a  |
+| `qwen3-tts.<DOMAIN>`                              | `qwen3-tts` container            | 8505 |
+| `voxtral-tts.<DOMAIN>`                            | `voxtral-tts` container          | 8605 |
+| `voxtral-mini-4b-realtime.<DOMAIN>`               | `voxtral-mini-4b-realtime`       | 8401 |
+| `<DOMAIN>` (root)                                 | `/health` only                   | n/a  |
 
 The router prefers `X-Forwarded-Host` over `Host`, so the shim can terminate
-TLS for `*.realtime.tinfoil.sh` and forward plain HTTP without the router
-having to understand TLS. The wildcard cert is provisioned by the shim via
-`tls-wildcard: true` in `tinfoil-config.yml`. `DOMAIN` itself is read from
-`external-config.yml` (matching the model-router pattern), so the same image
-works for staging and prod.
+TLS for `*.<DOMAIN>` and forward plain HTTP without the router having to
+understand TLS. The wildcard cert is provisioned by the shim via
+`tls-wildcard: true` in `tinfoil-config.yml`.
+
+## WebSocket subprotocol-echo fix
+
+vLLM's native `/v1/realtime` handler calls `websocket.accept()` without a
+subprotocol argument, so the 101 response carries no `Sec-WebSocket-Protocol`
+header even when the client offered subprotocols. RFC 6455 makes that fatal in
+Chromium and Firefox (close 1006); Safari is lenient. The router patches it on
+the way back via `httputil.ReverseProxy.ModifyResponse`:
+
+- 101 responses get `Sec-WebSocket-Protocol` injected with one of the
+  client's offered subprotocols, preferring `"realtime"`.
+- Auth-bearing subprotocols (`openai-insecure-api-key.*`, `openai-organization.*`,
+  `openai-project.*`) are filtered out so the API key never lands in plaintext
+  response headers.
+- Non-101 responses are untouched, so the hook is safe to apply to every backend.
+
+See `router/main.go:fixRealtimeSubprotocolEcho` and the picker tests in
+`router/main_test.go:TestPickRealtimeSubprotocol`.
 
 ## Containers
 
@@ -48,84 +63,45 @@ works for staging and prod.
 
 `ghcr.io/tinfoilsh/confidential-realtime-models`
 
-Go reverse proxy (~280 lines). Builds from `router/`. Env knobs:
-
-- `LISTEN_ADDR` (default `:8080`)
-- `DOMAIN` (default `realtime.tinfoil.sh`)
-- `QWEN_TTS_URL` / `VOXTRAL_TTS_URL` / `VOXTRAL_MINI_REALTIME_URL` (defaults
-  point at loopback ports inside the enclave)
-
-### audio
-
-`ghcr.io/tinfoilsh/confidential-realtime-models-audio`
-
-`FROM vllm/vllm-openai:v0.20.0-cu130` plus a thin FastAPI proxy
-(`audio_proxy.py`) that fixes the realtime-WebSocket subprotocol-echo bug
-described in the file's header. Used by the `voxtral-mini-4b-realtime`
-container only — the TTS containers don't need a proxy.
-
-This image was previously published from the standalone
-`tinfoilsh/vllm-openai-audio` repo. Consolidated here, the audio proxy was
-also slimmed (vLLM 0.18 -> 0.20 fixes the M4A/WebM bugs that justified the
-old `convert_to_wav` / FFmpeg / librosa stack — see the cleanup commit for
-the full list).
+Go reverse proxy. `DOMAIN`, `LISTEN_ADDR`, and the per-backend URLs are env-driven.
+Defaults are loopback-only and `DOMAIN=localhost` so misconfigured deployments
+fail closed.
 
 ### omni
 
 `ghcr.io/tinfoilsh/confidential-realtime-models-omni`
 
 `FROM vllm/vllm-omni:v0.18.0` plus colocation-friendly stage configs at
-`/opt/realtime-configs/`:
+`/opt/realtime-configs/{qwen3_tts,voxtral_tts}_realtime.yaml`. The voxtral-mini
+container uses the same image without `--omni`/`--stage-configs-path`, since
+vLLM's native `/v1/realtime` ships in the underlying vllm 0.18 base.
 
-- `qwen3_tts_realtime.yaml` (`gpu_memory_utilization: 0.10` per stage)
-- `voxtral_tts_realtime.yaml` (`0.10` + `0.05` per stage)
-
-The stock vllm-omni stage configs claim 30-90% of one H200 per stage, which
-prevents colocating multiple TTS models. These trims fit the realtime stack
-(qwen3-tts + voxtral-tts + voxtral-mini-realtime) under ~80 GiB on H200.
-
-This image replaces the deprecated `tinfoilsh/vllm-omni`
-`v0.17.0rc1-tinfoil.2` fork — we now consume upstream vllm-omni directly.
+KV cache is pinned via `kv_cache_memory_bytes` (in stage configs for the TTS
+models) or `--kv-cache-memory-bytes` (CLI for voxtral-mini), so startup is
+deterministic regardless of which engine wins the GPU memory race.
 
 ## Local development
 
 ```bash
 # Router unit tests + build
-cd router && docker run --rm -v "$PWD":/work -w /work golang:1.25-alpine \
-  sh -c "go test ./... && go build ./..."
+cd router && docker run --rm -v "$PWD":/work -w /work --network=host \
+  golang:1.25-alpine sh -c "go vet ./... && go test ./... && go build ./..."
 
-# Audio proxy syntax check + picker tests
-cd audio && python3 -c "import ast; ast.parse(open('audio_proxy.py').read())"
-# (Full picker test cases live in .github/workflows/test.yml)
+# Build the omni image (FROM vllm/vllm-omni:v0.18.0 + stage configs)
+docker build -t crm-omni:test ./omni
 ```
 
-For end-to-end tests against the three live models on a single H200, see
+For end-to-end tests against the live stack on a single H200, see
 [`tinfoilsh/experiments-multi-model-vllm`](https://github.com/tinfoilsh/experiments-multi-model-vllm)
-— specifically `scripts/run_tts_trio_stack.sh`.
+and `tinfoilsh/tf-test`'s `infra/realtime_naked` and `infra/speech_naked`.
 
 ## Release
 
 Manual via Actions:
 
-1. Run `tinfoil-build.yml` with a `vX.Y.Z` version. It builds all three images
-   in parallel, then `tinfoilsh/update-container-action@dmccanns/multiple-images`
-   bumps the three `image:` digests in `tinfoil-config.yml`, opens & merges
-   the PR, and tags `vX.Y.Z`.
+1. Run `tinfoil-build.yml` with a `vX.Y.Z` version. It builds router + omni in
+   parallel, then `tinfoilsh/update-container-action@dmccanns/multiple-images`
+   bumps both digests in `tinfoil-config.yml`, opens & merges the PR, and tags
+   `vX.Y.Z`.
 2. `tinfoil-release.yml` is auto-triggered by step 1 against the new tag and
    runs `measure-image-action` to attest the released config.
-
-## Background
-
-- Bug fix: WebSocket subprotocol-echo (closes Chromium/Firefox with 1006 against
-  vanilla vLLM). The fix lives in `audio/audio_proxy.py`'s
-  `pick_realtime_subprotocol()` and is also worth upstreaming to
-  vllm-project/vllm `vllm/entrypoints/openai/realtime/connection.py:916`.
-- vllm-omni dropped: `tinfoilsh/vllm-omni` was a fork of `vllm-project/vllm-omni`
-  on `v0.17.0rc1` carrying tinfoil packaging. `tinfoilsh/vllm-omni:main` is now
-  in sync with upstream `v0.18.0+`, and we consume `vllm/vllm-omni:v0.18.0`
-  directly instead of building our own.
-- vLLM bumped 0.18 -> 0.20 in the audio image. Per
-  [vLLM 0.18 PR #35109](https://github.com/vllm-project/vllm/pull/35109)
-  M4A/WebM uploads work natively, and 0.20 cleaned up audio deps
-  (#39524, #39079, #39997). The 350+ lines of conversion code in the previous
-  `audio_proxy.py` are gone.
