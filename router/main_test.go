@@ -121,6 +121,30 @@ func TestVoxtralMiniRealtimeSubdomainHealth(t *testing.T) {
 	}
 }
 
+func TestWhisperSubdomainProxiesTranscriptions(t *testing.T) {
+	var gotPath string
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		_, _ = w.Write([]byte(`{"text":"hello"}`))
+	}))
+	defer backend.Close()
+
+	handler := newTestHandlerWith(t, "whisper", backend.URL)
+	req := newReq(http.MethodPost, "/v1/audio/transcriptions", strings.NewReader(`stub`),
+		"whisper-large-v3-turbo."+testDomain)
+	req.Header.Set("Content-Type", "multipart/form-data")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if gotPath != "/v1/audio/transcriptions" {
+		t.Fatalf("expected backend path /v1/audio/transcriptions, got %q", gotPath)
+	}
+}
+
 func TestUnknownSubdomainReturns404(t *testing.T) {
 	handler := newTestHandler(t)
 	req := newReq(http.MethodPost, "/v1/audio/speech", strings.NewReader(`{}`),
@@ -299,6 +323,7 @@ func TestBuildBackendsRejectsInvalidURL(t *testing.T) {
 		qwenTTSURL:             "http://127.0.0.1:8505",
 		voxtralTTSURL:          "://bad",
 		voxtralMiniRealtimeURL: "http://127.0.0.1:8402",
+		whisperURL:             "http://127.0.0.1:8001",
 	})
 	if err == nil {
 		t.Fatal("expected invalid url error")
@@ -312,6 +337,7 @@ func TestBuildBackendsRequiresSchemeAndHost(t *testing.T) {
 		qwenTTSURL:             "/relative",
 		voxtralTTSURL:          "http://127.0.0.1:8605",
 		voxtralMiniRealtimeURL: "http://127.0.0.1:8402",
+		whisperURL:             "http://127.0.0.1:8001",
 	})
 	if err == nil || !strings.Contains(err.Error(), "scheme and host") {
 		t.Fatalf("expected scheme and host error, got %v", err)
@@ -325,6 +351,7 @@ func TestNewHandlerRequiresDomain(t *testing.T) {
 		qwenTTSURL:             "http://127.0.0.1:8505",
 		voxtralTTSURL:          "http://127.0.0.1:8605",
 		voxtralMiniRealtimeURL: "http://127.0.0.1:8402",
+		whisperURL:             "http://127.0.0.1:8001",
 	})
 	if err == nil {
 		t.Fatal("expected DOMAIN required error")
@@ -349,7 +376,7 @@ func newTestHandler(t *testing.T) http.Handler {
 
 // newTestHandlerWith returns a handler whose specific backend is replaced
 // with the given httptest server URL. backend names: "qwen", "voxtral_tts",
-// "voxtral_mini".
+// "voxtral_mini", "whisper".
 func newTestHandlerWith(t *testing.T, name, backendURL string) http.Handler {
 	t.Helper()
 
@@ -359,6 +386,7 @@ func newTestHandlerWith(t *testing.T, name, backendURL string) http.Handler {
 		qwenTTSURL:             "http://127.0.0.1:8505",
 		voxtralTTSURL:          "http://127.0.0.1:8605",
 		voxtralMiniRealtimeURL: "http://127.0.0.1:8402",
+		whisperURL:             "http://127.0.0.1:8001",
 	}
 
 	switch name {
@@ -370,6 +398,8 @@ func newTestHandlerWith(t *testing.T, name, backendURL string) http.Handler {
 		cfg.voxtralTTSURL = backendURL
 	case "voxtral_mini":
 		cfg.voxtralMiniRealtimeURL = backendURL
+	case "whisper":
+		cfg.whisperURL = backendURL
 	default:
 		t.Fatalf("unknown backend override %q", name)
 	}

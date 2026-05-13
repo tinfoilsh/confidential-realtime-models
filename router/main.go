@@ -1,14 +1,16 @@
 // Package main implements the Tinfoil realtime-models reverse proxy.
 //
-// Three audio backends share the same enclave: qwen3-tts, voxtral-tts, and
-// voxtral-mini-4b-realtime. They all expose the OpenAI-standard
-// /v1/audio/speech and/or /v1/realtime paths, so we can't dispatch by path.
-// We route on the leftmost subdomain of the request's Host (taken from
-// X-Forwarded-Host when the shim terminates TLS):
+// Four audio backends share the same enclave: qwen3-tts, voxtral-tts,
+// voxtral-mini-4b-realtime, and whisper-large-v3-turbo. They all expose the
+// OpenAI-standard /v1/audio/speech, /v1/audio/transcriptions, and/or
+// /v1/realtime paths, so we can't dispatch by path. We route on the leftmost
+// subdomain of the request's Host (taken from X-Forwarded-Host when the shim
+// terminates TLS):
 //
 //   qwen3-tts.realtime.tinfoil.sh                 -> qwen3-tts container
 //   voxtral-tts.realtime.tinfoil.sh               -> voxtral-tts container
 //   voxtral-mini-4b-realtime.realtime.tinfoil.sh  -> voxtral-mini-4b-realtime
+//   whisper-large-v3-turbo.realtime.tinfoil.sh    -> whisper-large-v3-turbo
 //   realtime.tinfoil.sh                           -> /health on the router itself
 //
 // The shim's listen-port still terminates TLS for *.realtime.tinfoil.sh
@@ -41,6 +43,7 @@ type config struct {
 	qwenTTSURL             string
 	voxtralTTSURL          string
 	voxtralMiniRealtimeURL string
+	whisperURL             string
 }
 
 func main() {
@@ -50,6 +53,7 @@ func main() {
 		qwenTTSURL:             getenvDefault("QWEN_TTS_URL", "http://127.0.0.1:8505"),
 		voxtralTTSURL:          getenvDefault("VOXTRAL_TTS_URL", "http://127.0.0.1:8605"),
 		voxtralMiniRealtimeURL: getenvDefault("VOXTRAL_MINI_REALTIME_URL", "http://127.0.0.1:8402"),
+		whisperURL:             getenvDefault("WHISPER_URL", "http://127.0.0.1:8001"),
 	}
 
 	handler, err := newHandler(cfg)
@@ -67,6 +71,7 @@ func main() {
 	log.Printf("backend qwen3-tts                -> %s", cfg.qwenTTSURL)
 	log.Printf("backend voxtral-tts              -> %s", cfg.voxtralTTSURL)
 	log.Printf("backend voxtral-mini-4b-realtime -> %s", cfg.voxtralMiniRealtimeURL)
+	log.Printf("backend whisper-large-v3-turbo   -> %s", cfg.whisperURL)
 
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("server failed: %v", err)
@@ -124,6 +129,7 @@ func buildBackends(cfg config) (map[string]*backend, error) {
 		{name: "qwen3-tts", raw: cfg.qwenTTSURL},
 		{name: "voxtral-tts", raw: cfg.voxtralTTSURL},
 		{name: "voxtral-mini-4b-realtime", raw: cfg.voxtralMiniRealtimeURL},
+		{name: "whisper-large-v3-turbo", raw: cfg.whisperURL},
 	}
 
 	backends := make(map[string]*backend, len(specs))

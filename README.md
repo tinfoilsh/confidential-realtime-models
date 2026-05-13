@@ -1,6 +1,6 @@
 # confidential-realtime-models
 
-Tinfoil enclave that colocates three audio models on a single H200 plus a
+Tinfoil enclave that colocates four audio models on a single H200 plus a
 subdomain-routing reverse proxy. Two container images are built from this
 repo in addition to the upstream model packs.
 
@@ -32,6 +32,7 @@ via `DOMAIN` (read from `external-config.yml`):
 | `qwen3-tts.<DOMAIN>`                              | `qwen3-tts` container            | 8505 |
 | `voxtral-tts.<DOMAIN>`                            | `voxtral-tts` container          | 8605 |
 | `voxtral-mini-4b-realtime.<DOMAIN>`               | `voxtral-mini-4b-realtime`       | 8401 |
+| `whisper-large-v3-turbo.<DOMAIN>`                 | `whisper-large-v3-turbo`         | 8001 |
 | `<DOMAIN>` (root)                                 | `/health` only                   | n/a  |
 
 The router prefers `X-Forwarded-Host` over `Host`, so the shim can terminate
