@@ -19,7 +19,7 @@ models:
 
 containers:
   - name: "router"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models@sha256:71638b83116b23f03fba43379b38bbba0f6df38172097866c50ba3fed9b799a1" # v0.0.6
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models@sha256:0000000000000000000000000000000000000000000000000000000000000000" # placeholder - populated during release
     restart: always
     env:
       - LISTEN_ADDR: ":8080"
@@ -35,7 +35,7 @@ containers:
       start_period: 1m
 
   - name: "voxtral-mini-4b-realtime"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:eb39e3c55139b8cc5314fb2dbe32b8ed056eb7a14dd9162fbcff4d113284e35d" # v0.0.6
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000" # placeholder - populated during release
     runtime: nvidia
     gpus: all
     ipc: host
@@ -65,7 +65,7 @@ containers:
     ]
 
   - name: "qwen3-tts"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:eb39e3c55139b8cc5314fb2dbe32b8ed056eb7a14dd9162fbcff4d113284e35d" # v0.0.6
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000" # placeholder - populated during release
     runtime: nvidia
     gpus: all
     ipc: host
@@ -81,7 +81,7 @@ containers:
     ]
 
   - name: "voxtral-tts"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:eb39e3c55139b8cc5314fb2dbe32b8ed056eb7a14dd9162fbcff4d113284e35d" # v0.0.6
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000" # placeholder - populated during release
     runtime: nvidia
     gpus: all
     ipc: host
@@ -97,7 +97,7 @@ containers:
     ]
 
   - name: "whisper-large-v3-turbo"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:eb39e3c55139b8cc5314fb2dbe32b8ed056eb7a14dd9162fbcff4d113284e35d" # v0.0.6
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000" # placeholder - populated during release
     runtime: nvidia
     gpus: all
     ipc: host
