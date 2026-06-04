@@ -1,4 +1,4 @@
-cvm-version: 0.7.5
+cvm-version: 0.10.2
 memory: 131072
 cpus: 16
 gpus: 1
@@ -20,14 +20,15 @@ models:
 containers:
   - name: "router"
     image: "ghcr.io/tinfoilsh/confidential-realtime-models@sha256:0000000000000000000000000000000000000000000000000000000000000000" # placeholder - populated during release
+    networks: ["internal"]
     restart: always
     env:
       - LISTEN_ADDR: ":8080"
       - DOMAIN
-      - QWEN_TTS_URL: "http://127.0.0.1:8505"
-      - VOXTRAL_TTS_URL: "http://127.0.0.1:8605"
-      - VOXTRAL_MINI_REALTIME_URL: "http://127.0.0.1:8401"
-      - WHISPER_URL: "http://127.0.0.1:8001"
+      - QWEN_TTS_URL: "http://qwen3-tts:8505"
+      - VOXTRAL_TTS_URL: "http://voxtral-tts:8605"
+      - VOXTRAL_MINI_REALTIME_URL: "http://voxtral-mini-4b-realtime:8401"
+      - WHISPER_URL: "http://whisper-large-v3-turbo:8001"
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
       interval: 30s
@@ -36,10 +37,16 @@ containers:
 
   - name: "voxtral-mini-4b-realtime"
     image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000" # placeholder - populated during release
+    networks: ["internal"]
     runtime: nvidia
     gpus: all
     ipc: host
     restart: always
+    read_only: false
+    cap_add:
+      - IPC_LOCK
+      - SYS_RESOURCE
+      - SYS_NICE
     entrypoint: ["vllm", "serve"]
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8401/health"]
@@ -63,13 +70,22 @@ containers:
       "--port", "8401",
       "--host", "0.0.0.0"
     ]
+    tmpfs:
+      /tmp: size=512m,mode=1777,exec
+      /root: size=2g,mode=0700,exec
 
   - name: "qwen3-tts"
     image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000" # placeholder - populated during release
+    networks: ["internal"]
     runtime: nvidia
     gpus: all
     ipc: host
     restart: always
+    read_only: false
+    cap_add:
+      - IPC_LOCK
+      - SYS_RESOURCE
+      - SYS_NICE
     entrypoint: ["/bin/sh", "-c"]
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8505/health"]
@@ -79,13 +95,22 @@ containers:
     command: [
       "ln -s /tinfoil/mpk/mpk-6d350aa3684da02b2f59157fc11b7c5ea487fa265e98ca1c1dd74cf31ac2fa7e /tmp/model-CustomVoice && exec vllm serve /tmp/model-CustomVoice --stage-configs-path /opt/realtime-configs/qwen3_tts_realtime.yaml --port 8505 --host 0.0.0.0 --trust-remote-code --enforce-eager --omni --served-model-name qwen3-tts"
     ]
+    tmpfs:
+      /tmp: size=512m,mode=1777,exec
+      /root: size=2g,mode=0700,exec
 
   - name: "voxtral-tts"
     image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000" # placeholder - populated during release
+    networks: ["internal"]
     runtime: nvidia
     gpus: all
     ipc: host
     restart: always
+    read_only: false
+    cap_add:
+      - IPC_LOCK
+      - SYS_RESOURCE
+      - SYS_NICE
     entrypoint: ["/bin/sh", "-c"]
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8605/health"]
@@ -95,13 +120,22 @@ containers:
     command: [
       "ln -s /tinfoil/mpk/mpk-8f7b7407c2bd621160a89d5c3ed845baecd2912850aceca2ad264f06442f471b /tmp/model-VoxtralTTS && exec vllm serve /tmp/model-VoxtralTTS --stage-configs-path /opt/realtime-configs/voxtral_tts_realtime.yaml --port 8605 --host 0.0.0.0 --trust-remote-code --enforce-eager --omni --tokenizer-mode mistral --config-format mistral --load-format mistral --served-model-name voxtral-tts"
     ]
+    tmpfs:
+      /tmp: size=512m,mode=1777,exec
+      /root: size=2g,mode=0700,exec
 
   - name: "whisper-large-v3-turbo"
     image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000" # placeholder - populated during release
+    networks: ["internal"]
     runtime: nvidia
     gpus: all
     ipc: host
     restart: always
+    read_only: false
+    cap_add:
+      - IPC_LOCK
+      - SYS_RESOURCE
+      - SYS_NICE
     entrypoint: ["vllm", "serve"]
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8001/health"]
@@ -117,6 +151,12 @@ containers:
       "--port", "8001",
       "--host", "0.0.0.0"
     ]
+    tmpfs:
+      /tmp: size=512m,mode=1777,exec
+      /root: size=2g,mode=0700,exec
+
+networks:
+  internal: {}
 
 shim:
   listen-port: 443

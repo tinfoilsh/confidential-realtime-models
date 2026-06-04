@@ -11,7 +11,7 @@ repo in addition to the upstream model packs.
 ├── router/                # Go reverse proxy: subdomain dispatch + WebSocket
 │                          # subprotocol-echo fix (the only reason vanilla
 │                          # vLLM /v1/realtime closes 1006 in Chromium).
-├── omni/                  # Thin layer over vllm/vllm-omni:v0.18.0 with
+├── omni/                  # Thin layer over vllm/vllm-omni:v0.20.0 with
 │                          # colocation-friendly stage configs at
 │                          # /opt/realtime-configs/. Used by all three vLLM
 │                          # containers (qwen3-tts, voxtral-tts, voxtral-mini).
@@ -72,10 +72,10 @@ fail closed.
 
 `ghcr.io/tinfoilsh/confidential-realtime-models-omni`
 
-`FROM vllm/vllm-omni:v0.18.0` plus colocation-friendly stage configs at
+`FROM vllm/vllm-omni:v0.20.0` plus colocation-friendly stage configs at
 `/opt/realtime-configs/{qwen3_tts,voxtral_tts}_realtime.yaml`. The voxtral-mini
 container uses the same image without `--omni`/`--stage-configs-path`, since
-vLLM's native `/v1/realtime` ships in the underlying vllm 0.18 base.
+vLLM's native `/v1/realtime` ships in the underlying vllm 0.20 base.
 
 KV cache is pinned via `kv_cache_memory_bytes` (in stage configs for the TTS
 models) or `--kv-cache-memory-bytes` (CLI for voxtral-mini), so startup is
@@ -88,7 +88,7 @@ deterministic regardless of which engine wins the GPU memory race.
 cd router && docker run --rm -v "$PWD":/work -w /work --network=host \
   golang:1.25-alpine sh -c "go vet ./... && go test ./... && go build ./..."
 
-# Build the omni image (FROM vllm/vllm-omni:v0.18.0 + stage configs)
+# Build the omni image (FROM vllm/vllm-omni:v0.20.0 + stage configs)
 docker build -t crm-omni:test ./omni
 ```
 
