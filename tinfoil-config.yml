@@ -22,7 +22,7 @@ models:
 
 containers:
   - name: "router"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models@sha256:d75aa89cc5b4eca48ef77ccc6f1448f11ccbdf90be5963bc38892f6b03bec550" # v0.0.8
     restart: always
     env:
       - LISTEN_ADDR: ":8080"
@@ -38,7 +38,7 @@ containers:
       timeout: 5s
       start_period: 1m
   - name: "voxtral-mini-4b-realtime"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:9e24a95e8564cdb1e22c4dfea05c60d1d4dcad1e7f3643f995ad125d50d86041" # v0.0.8
     runtime: nvidia
     gpus: all
     restart: always
@@ -60,7 +60,7 @@ containers:
       timeout: 5s
       start_period: 5m
   - name: "qwen3-tts"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:9e24a95e8564cdb1e22c4dfea05c60d1d4dcad1e7f3643f995ad125d50d86041" # v0.0.8
     runtime: nvidia
     gpus: all
     restart: always
@@ -80,7 +80,7 @@ containers:
       timeout: 5s
       start_period: 5m
   - name: "voxtral-tts"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:9e24a95e8564cdb1e22c4dfea05c60d1d4dcad1e7f3643f995ad125d50d86041" # v0.0.8
     runtime: nvidia
     gpus: all
     restart: always
@@ -101,7 +101,7 @@ containers:
       timeout: 5s
       start_period: 5m
   - name: "whisper-large-v3-turbo"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:9e24a95e8564cdb1e22c4dfea05c60d1d4dcad1e7f3643f995ad125d50d86041" # v0.0.8
     runtime: nvidia
     gpus: all
     restart: always
