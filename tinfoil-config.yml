@@ -68,8 +68,8 @@ containers:
       - PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
     entrypoint: ["/bin/sh", "-c"]
     command: ["ln -s /tinfoil/mpk/mpk-6d350aa3684da02b2f59157fc11b7c5ea487fa265e98ca1c1dd74cf31ac2fa7e /tmp/model-CustomVoice
-          && exec vllm serve /tmp/model-CustomVoice --stage-configs-path /opt/realtime-configs/qwen3_tts_realtime.yaml --scheduling-policy
-          priority --port 8505 --host 0.0.0.0 --trust-remote-code --enforce-eager --omni --served-model-name qwen3-tts"]
+          && exec vllm serve /tmp/model-CustomVoice --stage-configs-path /opt/realtime-configs/qwen3_tts_realtime.yaml --port
+          8505 --host 0.0.0.0 --trust-remote-code --enforce-eager --omni --served-model-name qwen3-tts"]
     tmpfs:
       /tmp: size=512m,mode=1777,exec
       /root: size=2g,mode=0700,exec
@@ -88,9 +88,9 @@ containers:
       - PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
     entrypoint: ["/bin/sh", "-c"]
     command: ["ln -s /tinfoil/mpk/mpk-8f7b7407c2bd621160a89d5c3ed845baecd2912850aceca2ad264f06442f471b /tmp/model-VoxtralTTS
-          && exec vllm serve /tmp/model-VoxtralTTS --stage-configs-path /opt/realtime-configs/voxtral_tts_realtime.yaml --scheduling-policy
-          priority --port 8605 --host 0.0.0.0 --trust-remote-code --enforce-eager --omni --tokenizer-mode mistral --config-format
-          mistral --load-format mistral --served-model-name voxtral-tts"]
+          && exec vllm serve /tmp/model-VoxtralTTS --stage-configs-path /opt/realtime-configs/voxtral_tts_realtime.yaml --port
+          8605 --host 0.0.0.0 --trust-remote-code --enforce-eager --omni --tokenizer-mode mistral --config-format mistral --load-format
+          mistral --served-model-name voxtral-tts"]
     tmpfs:
       /tmp: size=512m,mode=1777,exec
       /root: size=2g,mode=0700,exec
