@@ -1,7 +1,10 @@
-cvm-version: 0.7.5
-memory: 131072
+cvm-version: 0.10.4
 cpus: 16
+memory: 131072
 gpus: 1
+
+networks:
+  models: {}
 
 models:
   - name: "qwen3-tts"
@@ -19,107 +22,106 @@ models:
 
 containers:
   - name: "router"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models@sha256:0000000000000000000000000000000000000000000000000000000000000000" # placeholder - populated during release
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models@sha256:0000000000000000000000000000000000000000000000000000000000000000"
     restart: always
     env:
       - LISTEN_ADDR: ":8080"
       - DOMAIN
-      - QWEN_TTS_URL: "http://127.0.0.1:8505"
-      - VOXTRAL_TTS_URL: "http://127.0.0.1:8605"
-      - VOXTRAL_MINI_REALTIME_URL: "http://127.0.0.1:8401"
-      - WHISPER_URL: "http://127.0.0.1:8001"
+      - QWEN_TTS_URL: "http://qwen3-tts:8505"
+      - VOXTRAL_TTS_URL: "http://voxtral-tts:8605"
+      - VOXTRAL_MINI_REALTIME_URL: "http://voxtral-mini-4b-realtime:8401"
+      - WHISPER_URL: "http://whisper-large-v3-turbo:8001"
+    networks: ["models"]
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
       interval: 30s
       timeout: 5s
       start_period: 1m
-
   - name: "voxtral-mini-4b-realtime"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000" # placeholder - populated during release
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000"
     runtime: nvidia
     gpus: all
-    ipc: host
     restart: always
+    env:
+      - PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
     entrypoint: ["vllm", "serve"]
+    command: ["--model", "/tinfoil/mpk/mpk-b451a321f0da47d9a1d582d3fc46a0ef981de7617aa9e542b8252face85d8bb2", "--served-model-name",
+      "voxtral-mini-4b-realtime", "--tokenizer-mode", "mistral", "--config-format", "mistral", "--load-format", "mistral",
+      "--trust-remote-code", "--compilation-config", "{\"cudagraph_mode\":\"PIECEWISE\"}", "--tensor-parallel-size", "1",
+      "--max-model-len", "16000", "--max-num-batched-tokens", "8192", "--max-num-seqs", "16", "--gpu-memory-utilization",
+      "0.20", "--kv-cache-memory-bytes", "17179869184", "--scheduling-policy", "priority", "--port", "8401", "--host", "0.0.0.0"]
+    tmpfs:
+      /tmp: size=512m,mode=1777,exec
+      /root: size=2g,mode=0700,exec
+    networks: ["models"]
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8401/health"]
       interval: 30s
       timeout: 5s
       start_period: 5m
-    command: [
-      "--model", "/tinfoil/mpk/mpk-b451a321f0da47d9a1d582d3fc46a0ef981de7617aa9e542b8252face85d8bb2",
-      "--served-model-name", "voxtral-mini-4b-realtime",
-      "--tokenizer-mode", "mistral",
-      "--config-format", "mistral",
-      "--load-format", "mistral",
-      "--trust-remote-code",
-      "--compilation-config", "{\"cudagraph_mode\":\"PIECEWISE\"}",
-      "--tensor-parallel-size", "1",
-      "--max-model-len", "16000",
-      "--max-num-batched-tokens", "8192",
-      "--max-num-seqs", "16",
-      "--gpu-memory-utilization", "0.20",
-      "--kv-cache-memory-bytes", "17179869184",
-      "--port", "8401",
-      "--host", "0.0.0.0"
-    ]
-
   - name: "qwen3-tts"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000" # placeholder - populated during release
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000"
     runtime: nvidia
     gpus: all
-    ipc: host
     restart: always
+    env:
+      - PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
     entrypoint: ["/bin/sh", "-c"]
+    command: ["ln -s /tinfoil/mpk/mpk-6d350aa3684da02b2f59157fc11b7c5ea487fa265e98ca1c1dd74cf31ac2fa7e /tmp/model-CustomVoice
+          && exec vllm serve /tmp/model-CustomVoice --stage-configs-path /opt/realtime-configs/qwen3_tts_realtime.yaml --scheduling-policy
+          priority --port 8505 --host 0.0.0.0 --trust-remote-code --enforce-eager --omni --served-model-name qwen3-tts"]
+    tmpfs:
+      /tmp: size=512m,mode=1777,exec
+      /root: size=2g,mode=0700,exec
+    networks: ["models"]
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8505/health"]
       interval: 30s
       timeout: 5s
       start_period: 5m
-    command: [
-      "ln -s /tinfoil/mpk/mpk-6d350aa3684da02b2f59157fc11b7c5ea487fa265e98ca1c1dd74cf31ac2fa7e /tmp/model-CustomVoice && exec vllm serve /tmp/model-CustomVoice --stage-configs-path /opt/realtime-configs/qwen3_tts_realtime.yaml --port 8505 --host 0.0.0.0 --trust-remote-code --enforce-eager --omni --served-model-name qwen3-tts"
-    ]
-
   - name: "voxtral-tts"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000" # placeholder - populated during release
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000"
     runtime: nvidia
     gpus: all
-    ipc: host
     restart: always
+    env:
+      - PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
     entrypoint: ["/bin/sh", "-c"]
+    command: ["ln -s /tinfoil/mpk/mpk-8f7b7407c2bd621160a89d5c3ed845baecd2912850aceca2ad264f06442f471b /tmp/model-VoxtralTTS
+          && exec vllm serve /tmp/model-VoxtralTTS --stage-configs-path /opt/realtime-configs/voxtral_tts_realtime.yaml --scheduling-policy
+          priority --port 8605 --host 0.0.0.0 --trust-remote-code --enforce-eager --omni --tokenizer-mode mistral --config-format
+          mistral --load-format mistral --served-model-name voxtral-tts"]
+    tmpfs:
+      /tmp: size=512m,mode=1777,exec
+      /root: size=2g,mode=0700,exec
+    networks: ["models"]
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8605/health"]
       interval: 30s
       timeout: 5s
       start_period: 5m
-    command: [
-      "ln -s /tinfoil/mpk/mpk-8f7b7407c2bd621160a89d5c3ed845baecd2912850aceca2ad264f06442f471b /tmp/model-VoxtralTTS && exec vllm serve /tmp/model-VoxtralTTS --stage-configs-path /opt/realtime-configs/voxtral_tts_realtime.yaml --port 8605 --host 0.0.0.0 --trust-remote-code --enforce-eager --omni --tokenizer-mode mistral --config-format mistral --load-format mistral --served-model-name voxtral-tts"
-    ]
-
   - name: "whisper-large-v3-turbo"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000" # placeholder - populated during release
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000"
     runtime: nvidia
     gpus: all
-    ipc: host
     restart: always
+    env:
+      - PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
     entrypoint: ["vllm", "serve"]
+    command: ["/tinfoil/mpk/mpk-dd81839982fa01a289f7b60613055e4e1f789503c25a3535b75d53841f7f5b78", "--served-model-name",
+      "whisper-large-v3-turbo", "--gpu-memory-utilization", "0.10", "--kv-cache-memory-bytes", "4294967296", "--max-num-seqs",
+      "16", "--scheduling-policy", "priority", "--port", "8001", "--host", "0.0.0.0"]
+    tmpfs:
+      /tmp: size=512m,mode=1777,exec
+      /root: size=2g,mode=0700,exec
+    networks: ["models"]
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8001/health"]
       interval: 30s
       timeout: 5s
       start_period: 5m
-    command: [
-      "/tinfoil/mpk/mpk-dd81839982fa01a289f7b60613055e4e1f789503c25a3535b75d53841f7f5b78",
-      "--served-model-name", "whisper-large-v3-turbo",
-      "--gpu-memory-utilization", "0.10",
-      "--kv-cache-memory-bytes", "4294967296",
-      "--max-num-seqs", "16",
-      "--port", "8001",
-      "--host", "0.0.0.0"
-    ]
 
 shim:
-  listen-port: 443
   upstream-port: 8080
   tls-wildcard: true
   authenticated: true
