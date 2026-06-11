@@ -117,6 +117,13 @@ func newHandler(cfg config) (http.Handler, error) {
 			return
 		}
 
+		// OpenAI Realtime transcription clients (?intent=transcription) get the
+		// dialect translation layer; vLLM-dialect clients (?model=) pass through.
+		if b.name == vllmRealtimeModel && isOpenAICompatUpgrade(r) {
+			serveOpenAICompat(w, r, b.upstream)
+			return
+		}
+
 		b.proxy.ServeHTTP(w, r)
 	}), nil
 }
