@@ -255,7 +255,9 @@ func pickRealtimeSubprotocol(offered []string) string {
 	for _, p := range offered {
 		sensitive := false
 		for _, prefix := range sensitiveSubprotocolPrefixes {
-			if strings.HasPrefix(p, prefix) {
+			// Case-insensitive: a mixed-case credential token must not
+			// slip past the filter and be echoed in plaintext headers.
+			if len(p) >= len(prefix) && strings.EqualFold(p[:len(prefix)], prefix) {
 				sensitive = true
 				break
 			}

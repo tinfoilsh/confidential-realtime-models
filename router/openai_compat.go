@@ -51,6 +51,10 @@ const (
 	backendDialTimeout = 10 * time.Second
 	doneWaitTimeout    = 15 * time.Second
 	writeTimeout       = 10 * time.Second
+	// idleTimeout bounds how long a half-open connection can retain a
+	// session (and its in-memory partial transcript); rolled forward on
+	// every received message.
+	idleTimeout = 15 * time.Minute
 )
 
 var compatUpgrader = websocket.Upgrader{
@@ -78,7 +82,6 @@ type rtEvent map[string]any
 type compatSession struct {
 	client     *websocket.Conn
 	backendURL *url.URL
-	authHeader string
 
 	mu               sync.Mutex // guards client writes and all state below
 	backend          *websocket.Conn
@@ -94,16 +97,10 @@ type compatSession struct {
 
 // serveOpenAICompat handles one OpenAI-dialect client connection end to end.
 func serveOpenAICompat(w http.ResponseWriter, r *http.Request, backendURL *url.URL) {
-	authHeader := r.Header.Get("Authorization")
-
-	// Browser clients carry the API key in a subprotocol. Lift it into the
-	// Authorization header for the backend dial and echo only safe protocols.
+	// Client credentials stop here: auth and billing are enforced upstream,
+	// and the backend dial deliberately carries no Authorization header or
+	// credential-bearing subprotocol.
 	offered := parseSubprotocols(r.Header.Values("Sec-WebSocket-Protocol"))
-	for _, p := range offered {
-		if strings.HasPrefix(p, "openai-insecure-api-key.") && authHeader == "" {
-			authHeader = "Bearer " + strings.TrimPrefix(p, "openai-insecure-api-key.")
-		}
-	}
 	var respHeader http.Header
 	if chosen := pickRealtimeSubprotocol(offered); chosen != "" {
 		respHeader = http.Header{"Sec-WebSocket-Protocol": []string{chosen}}
@@ -119,13 +116,13 @@ func serveOpenAICompat(w http.ResponseWriter, r *http.Request, backendURL *url.U
 	s := &compatSession{
 		client:     client,
 		backendURL: backendURL,
-		authHeader: authHeader,
 		clientRate: defaultClientRate,
 	}
 
 	s.mu.Lock()
 	if err := s.connectBackendLocked(); err != nil {
-		s.sendErrorLocked("server_error", "backend_unavailable", fmt.Sprintf("could not reach model backend: %v", err))
+		log.Printf("openai-compat: backend dial failed: %v", err)
+		s.sendErrorLocked("server_error", "backend_unavailable", "model backend unavailable")
 		s.mu.Unlock()
 		return
 	}
@@ -144,9 +141,8 @@ func serveOpenAICompat(w http.ResponseWriter, r *http.Request, backendURL *url.U
 	if s.backend != nil {
 		_ = s.backend.SetWriteDeadline(time.Now().Add(writeTimeout))
 		_ = s.backend.WriteJSON(rtEvent{"type": "input_audio_buffer.commit", "final": true})
-		_ = s.backend.Close()
-		s.backend = nil
 	}
+	s.discardBackendLocked()
 }
 
 // connectBackendLocked dials vLLM and performs its handshake. Caller holds mu.
@@ -161,12 +157,8 @@ func (s *compatSession) connectBackendLocked() error {
 	wsURL.Path = "/v1/realtime"
 	wsURL.RawQuery = url.Values{"model": []string{vllmRealtimeModel}}.Encode()
 
-	header := http.Header{}
-	if s.authHeader != "" {
-		header.Set("Authorization", s.authHeader)
-	}
 	dialer := websocket.Dialer{HandshakeTimeout: backendDialTimeout}
-	conn, _, err := dialer.Dial(wsURL.String(), header)
+	conn, _, err := dialer.Dial(wsURL.String(), nil)
 	if err != nil {
 		return err
 	}
@@ -203,6 +195,7 @@ func (s *compatSession) connectBackendLocked() error {
 func (s *compatSession) backendLoop(conn *websocket.Conn, gen int) {
 	for {
 		var msg rtEvent
+		_ = conn.SetReadDeadline(time.Now().Add(idleTimeout))
 		if err := conn.ReadJSON(&msg); err != nil {
 			s.mu.Lock()
 			// Only report unexpected deaths of the live connection.
@@ -268,6 +261,7 @@ func (s *compatSession) backendLoop(conn *websocket.Conn, gen int) {
 func (s *compatSession) clientLoop() {
 	for {
 		var msg rtEvent
+		_ = s.client.SetReadDeadline(time.Now().Add(idleTimeout))
 		if err := s.client.ReadJSON(&msg); err != nil {
 			return
 		}
@@ -286,10 +280,7 @@ func (s *compatSession) clientLoop() {
 		case "input_audio_buffer.clear":
 			s.mu.Lock()
 			// vLLM has no clear; drop the turn by recycling the backend.
-			if s.backend != nil {
-				_ = s.backend.Close()
-				s.backend = nil
-			}
+			s.discardBackendLocked()
 			s.turnText = ""
 			s.bytesSinceCommit = 0
 			s.sendEventLocked(rtEvent{"type": "input_audio_buffer.cleared"})
@@ -343,7 +334,8 @@ func (s *compatSession) handleAppend(msg rtEvent) {
 
 	if s.backend == nil {
 		if err := s.connectBackendLocked(); err != nil {
-			s.sendErrorLocked("server_error", "backend_unavailable", fmt.Sprintf("could not reach model backend: %v", err))
+			log.Printf("openai-compat: backend dial failed: %v", err)
+			s.sendErrorLocked("server_error", "backend_unavailable", "model backend unavailable")
 			return
 		}
 	}
@@ -414,13 +406,21 @@ func (s *compatSession) handleCommit() {
 	})
 
 	// The vLLM session is dead after a final commit; recycle for the next turn.
+	s.discardBackendLocked()
+	s.itemSeq++
+	s.turnText = ""
+	s.bytesSinceCommit = 0
+}
+
+// discardBackendLocked closes and forgets the backend connection, bumping the
+// generation so a delta racing the close can't land in the next turn's text.
+// Caller holds mu.
+func (s *compatSession) discardBackendLocked() {
 	if s.backend != nil {
 		_ = s.backend.Close()
 		s.backend = nil
 	}
-	s.itemSeq++
-	s.turnText = ""
-	s.bytesSinceCommit = 0
+	s.backendGen++
 }
 
 // --- helpers (callers hold mu) ---
@@ -448,7 +448,7 @@ func (s *compatSession) sendEventLocked(ev rtEvent) {
 	ev["event_id"] = fmt.Sprintf("event_%04d", s.eventSeq)
 	_ = s.client.SetWriteDeadline(time.Now().Add(writeTimeout))
 	if err := s.client.WriteJSON(ev); err != nil {
-		log.Printf("openai-compat: client write failed: %v", err)
+		log.Printf("openai-compat: client write failed (%T)", err)
 	}
 }
 
