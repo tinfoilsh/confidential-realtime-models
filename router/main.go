@@ -7,11 +7,11 @@
 // subdomain of the request's Host (taken from X-Forwarded-Host when the shim
 // terminates TLS):
 //
-//   qwen3-tts.realtime.tinfoil.sh                 -> qwen3-tts container
-//   voxtral-tts.realtime.tinfoil.sh               -> voxtral-tts container
-//   voxtral-mini-4b-realtime.realtime.tinfoil.sh  -> voxtral-mini-4b-realtime
-//   whisper-large-v3-turbo.realtime.tinfoil.sh    -> whisper-large-v3-turbo
-//   realtime.tinfoil.sh                           -> /health on the router itself
+//	qwen3-tts.realtime.tinfoil.sh                 -> qwen3-tts container
+//	voxtral-tts.realtime.tinfoil.sh               -> voxtral-tts container
+//	voxtral-mini-4b-realtime.realtime.tinfoil.sh  -> voxtral-mini-4b-realtime
+//	whisper-large-v3-turbo.realtime.tinfoil.sh    -> whisper-large-v3-turbo
+//	realtime.tinfoil.sh                           -> /health on the router itself
 //
 // The shim's listen-port still terminates TLS for *.realtime.tinfoil.sh
 // (wildcard cert required). All requests reach this router on plain HTTP via
@@ -114,6 +114,13 @@ func newHandler(cfg config) (http.Handler, error) {
 		if !ok {
 			log.Printf("unknown model subdomain %q (host=%q)", modelName, r.Header.Get("X-Forwarded-Host"))
 			http.Error(w, fmt.Sprintf("unknown model: %s", modelName), http.StatusNotFound)
+			return
+		}
+
+		// OpenAI Realtime transcription clients (?intent=transcription) get the
+		// dialect translation layer; vLLM-dialect clients (?model=) pass through.
+		if b.name == vllmRealtimeModel && isOpenAICompatUpgrade(r) {
+			serveOpenAICompat(w, r, b.upstream)
 			return
 		}
 
@@ -248,7 +255,7 @@ func pickRealtimeSubprotocol(offered []string) string {
 	for _, p := range offered {
 		sensitive := false
 		for _, prefix := range sensitiveSubprotocolPrefixes {
-			if strings.HasPrefix(p, prefix) {
+			if len(p) >= len(prefix) && strings.EqualFold(p[:len(prefix)], prefix) {
 				sensitive = true
 				break
 			}
