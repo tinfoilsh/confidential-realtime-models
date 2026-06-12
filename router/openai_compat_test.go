@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/base64"
 	"encoding/binary"
+	"fmt"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -187,8 +188,13 @@ func TestOpenAICompatFullTurn(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("session.update: %v", err)
 	}
-	if msg := readEvent(t, conn); msg["type"] != "session.updated" {
-		t.Fatalf("expected session.updated, got %v", msg["type"])
+	// server_vad in the config is accepted without effect and never echoed.
+	updated := readEvent(t, conn)
+	if updated["type"] != "session.updated" {
+		t.Fatalf("expected session.updated, got %v", updated["type"])
+	}
+	if strings.Contains(fmt.Sprintf("%v", updated["session"]), "turn_detection") {
+		t.Fatal("session.updated must not echo a turn_detection we don't honor")
 	}
 
 	// One second of 24kHz audio, in chunks.

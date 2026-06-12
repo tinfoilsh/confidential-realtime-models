@@ -7,11 +7,11 @@
 // subdomain of the request's Host (taken from X-Forwarded-Host when the shim
 // terminates TLS):
 //
-//   qwen3-tts.realtime.tinfoil.sh                 -> qwen3-tts container
-//   voxtral-tts.realtime.tinfoil.sh               -> voxtral-tts container
-//   voxtral-mini-4b-realtime.realtime.tinfoil.sh  -> voxtral-mini-4b-realtime
-//   whisper-large-v3-turbo.realtime.tinfoil.sh    -> whisper-large-v3-turbo
-//   realtime.tinfoil.sh                           -> /health on the router itself
+//	qwen3-tts.realtime.tinfoil.sh                 -> qwen3-tts container
+//	voxtral-tts.realtime.tinfoil.sh               -> voxtral-tts container
+//	voxtral-mini-4b-realtime.realtime.tinfoil.sh  -> voxtral-mini-4b-realtime
+//	whisper-large-v3-turbo.realtime.tinfoil.sh    -> whisper-large-v3-turbo
+//	realtime.tinfoil.sh                           -> /health on the router itself
 //
 // The shim's listen-port still terminates TLS for *.realtime.tinfoil.sh
 // (wildcard cert required). All requests reach this router on plain HTTP via
@@ -255,8 +255,6 @@ func pickRealtimeSubprotocol(offered []string) string {
 	for _, p := range offered {
 		sensitive := false
 		for _, prefix := range sensitiveSubprotocolPrefixes {
-			// Case-insensitive: a mixed-case credential token must not
-			// slip past the filter and be echoed in plaintext headers.
 			if len(p) >= len(prefix) && strings.EqualFold(p[:len(prefix)], prefix) {
 				sensitive = true
 				break

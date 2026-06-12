@@ -58,6 +58,45 @@ the way back via `httputil.ReverseProxy.ModifyResponse`:
 See `router/main.go:fixRealtimeSubprotocolEcho` and the picker tests in
 `router/main_test.go:TestPickRealtimeSubprotocol`.
 
+## OpenAI Realtime compatibility (voxtral-mini-4b-realtime)
+
+vLLM's `/v1/realtime` speaks its own minimal dialect, not the OpenAI Realtime
+API. For `voxtral-mini-4b-realtime` only, the router carries a translation
+layer (`router/openai_compat.go`) so stock OpenAI Realtime transcription
+clients work by changing just the URL. Connections with `?intent=transcription`
+get the translated session; connections with `?model=` keep the vLLM dialect
+passthrough.
+
+What the layer does:
+
+- `session.created` / `session.update` / `session.updated` handshake; the
+  client's declared input format is honored (PCM16 at 24kHz by default,
+  resampled in-router to the model's 16kHz; 16kHz declared passes through;
+  non-PCM formats are rejected).
+- `transcription.delta` → `conversation.item.input_audio_transcription.delta`.
+- Each client `input_audio_buffer.commit` becomes a vLLM final commit; the
+  resulting `transcription.done` is emitted as `input_audio_buffer.committed`
+  plus `conversation.item.input_audio_transcription.completed`. vLLM sessions
+  are dead after a final commit, so the backend is re-dialed transparently for
+  the next turn.
+- An empty commit returns the standard `input_audio_buffer_commit_empty` error.
+- Client credentials stop at this layer: auth and billing are enforced
+  upstream, so the backend dial carries no Authorization header and
+  credential-bearing subprotocols are never forwarded.
+
+**⚠️ Voice activity detection is NOT emulated.** The OpenAI API defaults to
+`server_vad` turn detection: the server detects silence, commits turns itself,
+and emits `speech_started` / `speech_stopped` events. This layer does none of
+that — a `turn_detection` config is accepted without effect (and deliberately
+not echoed in `session.updated`), no speech events are emitted, and turns end
+**only** when the client sends `input_audio_buffer.commit`. Push-to-talk
+dictation clients, which commit once per utterance, work exactly as expected.
+Hands-free clients that stream continuously and wait for the server to end
+turns will see deltas accumulate but never receive a `completed` event.
+
+See `router/openai_compat.go` and `router/openai_compat_test.go` (fake vLLM
+backend matching production behavior).
+
 ## Containers
 
 ### router

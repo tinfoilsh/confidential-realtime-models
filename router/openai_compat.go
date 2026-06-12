@@ -36,10 +36,11 @@ import (
 //	backend transcription.delta      -> conversation.item.input_audio_transcription.delta
 //	backend error                    -> OpenAI error event
 //
-// Turn detection (`server_vad`) is NOT emulated: session.update accepting a
-// turn_detection config is a polite lie — the session behaves as one manual
-// turn per commit. This serves push-to-talk dictation clients, which commit
-// exactly once per utterance.
+// Turn detection (`server_vad`) is NOT emulated: a turn_detection config is
+// accepted without effect (and never echoed in session.updated), and the
+// session behaves as one manual turn per commit. This serves push-to-talk
+// dictation clients, which commit exactly once per utterance. See the README
+// for the compatibility contract.
 //
 // vLLM-dialect clients (`?model=`) are unaffected; they keep the passthrough
 // reverse proxy.
