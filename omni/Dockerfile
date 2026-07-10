@@ -7,6 +7,22 @@
 # which prevents colocating multiple TTS models on a single H200. Our trimmed
 # variants live under stage_configs/ and are mounted at /opt/realtime-configs/
 # so the container command can reference them with a stable path.
+#
+# Patches in patches/ are -p1 unified diffs rooted at /; see patches/README.md.
+# They target usr/local/lib/python3.12/dist-packages/... to match the base
+# image. Each patch cites its upstream PR so it can be retired after a bump.
 FROM vllm/vllm-omni:v0.18.0@sha256:6412a0c6cb03321761a40a65301cdcd87a4ef6bc7a75510c69b039c301cdbf8f
+
+COPY patches/ /tmp/tinfoil-patches/
+RUN set -eux; \
+    test -x /usr/bin/patch; \
+    cd /; \
+    for p in /tmp/tinfoil-patches/*.patch; do \
+        echo "Applying $(basename "$p")"; \
+        /usr/bin/patch -p1 --no-backup-if-mismatch --fuzz=0 < "$p"; \
+    done; \
+    find /usr/local/lib/python3.12/dist-packages/vllm -name '__pycache__' -type d -exec rm -rf {} + || true; \
+    rm -rf /tmp/tinfoil-patches; \
+    python3 -c "import vllm; print('vllm', vllm.__version__, 'with tinfoil realtime patches')"
 
 COPY stage_configs/ /opt/realtime-configs/
