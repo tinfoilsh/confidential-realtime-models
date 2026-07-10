@@ -25,10 +25,11 @@ import (
 //
 // This layer terminates the client WebSocket when the connection looks like an
 // OpenAI transcription client (`?intent=transcription`), dials the vLLM
-// backend, and translates both directions:
+// backend lazily (on first audio append), and translates both directions:
 //
 //	client session.update            -> consumed (rate extracted), session.updated replied
-//	client input_audio_buffer.append -> resampled to 16kHz, forwarded
+//	client input_audio_buffer.append -> resampled to 16kHz, forwarded; dials
+//	                                    backend + readiness commit on first chunk
 //	client input_audio_buffer.commit -> backend commit {final:true}; await
 //	                                    transcription.done; emit committed +
 //	                                    ...input_audio_transcription.completed;
@@ -120,13 +121,13 @@ func serveOpenAICompat(w http.ResponseWriter, r *http.Request, backendURL *url.U
 		clientRate: defaultClientRate,
 	}
 
+	// Lazy dial: send session.created immediately without connecting to the
+	// backend. The backend is dialed on the first input_audio_buffer.append
+	// (see handleAppend). This avoids starting a vLLM generation that idles
+	// until the client sends audio — the root cause of the zombie bug where a
+	// session that idles ~60s before its first turn silently stops
+	// transcribing while keeping the WebSocket open.
 	s.mu.Lock()
-	if err := s.connectBackendLocked(); err != nil {
-		log.Printf("openai-compat: backend dial failed: %v", err)
-		s.sendErrorLocked("server_error", "backend_unavailable", "model backend unavailable")
-		s.mu.Unlock()
-		return
-	}
 	s.sendEventLocked(rtEvent{
 		"type":    "session.created",
 		"session": s.sessionObjectLocked(),
