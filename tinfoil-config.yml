@@ -129,6 +129,7 @@ shim:
     - /v1/audio/speech
     - /v1/audio/transcriptions
     - /v1/realtime
+    - /metrics
   paths:
     - /health
     - /metrics
