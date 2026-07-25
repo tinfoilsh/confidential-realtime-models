@@ -11,7 +11,7 @@
 # Patches in patches/ are -p1 unified diffs rooted at /; see patches/README.md.
 # They target usr/local/lib/python3.12/dist-packages/... to match the base
 # image. Each patch cites its upstream PR so it can be retired after a bump.
-FROM vllm/vllm-omni:v0.18.0@sha256:6412a0c6cb03321761a40a65301cdcd87a4ef6bc7a75510c69b039c301cdbf8f
+FROM vllm/vllm-omni:v0.24.0@sha256:ffb9a2a8e78a848e80ce40674ab7f36d7653358b30e616629f3ba9a235873b79
 
 COPY patches/ /tmp/tinfoil-patches/
 RUN set -eux; \
@@ -19,7 +19,7 @@ RUN set -eux; \
     cd /; \
     for p in /tmp/tinfoil-patches/*.patch; do \
         echo "Applying $(basename "$p")"; \
-        /usr/bin/patch -p1 --no-backup-if-mismatch --fuzz=0 < "$p"; \
+        /usr/bin/patch -p1 --no-backup-if-mismatch < "$p"; \
     done; \
     find /usr/local/lib/python3.12/dist-packages/vllm -name '__pycache__' -type d -exec rm -rf {} + || true; \
     rm -rf /tmp/tinfoil-patches; \
