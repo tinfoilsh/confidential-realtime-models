@@ -31,3 +31,20 @@ The fix removes the `wait_for` wrapper so `feed_tokens()` waits indefinitely
 for the next engine output; the task is still bounded by the request
 lifecycle (`token_task.cancel()` in the `finally` block). Retire this patch
 once the base image is bumped to a vLLM release that contains #44461.
+
+### 0002 — voxtral-tts-fix-codes-audio-feedback
+
+Upstream: [vllm-project/vllm-omni#4954](https://github.com/vllm-project/vllm-omni/pull/4954)
+(merged to `main` 2026-07-08, first released in v0.25.0rc1; not in any
+v0.24.x tag).
+
+vllm-omni's inter-stage payload refactor (#4527, in v0.24.0) moved Voxtral
+TTS decode-feedback frames from a top-level `audio` key to nested
+`codes.audio`, but `tts_preprocess` still read only the old key. Decode
+feedback therefore lost all previous audio-code embeddings and
+`/v1/audio/speech` returned speech unrelated to the input text (issue #24
+in this repo, upstream [#4949](https://github.com/vllm-project/vllm-omni/issues/4949)).
+
+The fix reads `codes.audio` and falls back to the old top-level key. Retire
+this patch once the base image is bumped to a vllm-omni release that
+contains #4954 (v0.25.0 or later).
