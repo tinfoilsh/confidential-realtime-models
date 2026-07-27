@@ -22,7 +22,7 @@ models:
 
 containers:
   - name: "router"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models@sha256:f72526f22d5a5a12b665d89c81b620579578a24df70e60b6da928cd509dd8d03" # v0.0.12
     restart: always
     env:
       - LISTEN_ADDR: ":8080"
@@ -38,7 +38,7 @@ containers:
       timeout: 5s
       start_period: 1m
   - name: "voxtral-mini-4b-realtime"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:2d9599d5820f15a0e9fb58b2d2f85ac4f721859d4bb2bd159d86924a42197783" # v0.0.12
     runtime: nvidia
     gpus: all
     restart: always
@@ -89,7 +89,7 @@ containers:
       timeout: 5s
       start_period: 5m
   - name: "qwen3-tts"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:2d9599d5820f15a0e9fb58b2d2f85ac4f721859d4bb2bd159d86924a42197783" # v0.0.12
     runtime: nvidia
     gpus: all
     restart: always
@@ -111,7 +111,7 @@ containers:
       timeout: 5s
       start_period: 5m
   - name: "voxtral-tts"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:2d9599d5820f15a0e9fb58b2d2f85ac4f721859d4bb2bd159d86924a42197783" # v0.0.12
     runtime: nvidia
     gpus: all
     restart: always
@@ -134,7 +134,7 @@ containers:
       timeout: 5s
       start_period: 5m
   - name: "whisper-large-v3-turbo"
-    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:2d9599d5820f15a0e9fb58b2d2f85ac4f721859d4bb2bd159d86924a42197783" # v0.0.12
     runtime: nvidia
     gpus: all
     restart: always
