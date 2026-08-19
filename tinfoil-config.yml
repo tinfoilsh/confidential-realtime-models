@@ -38,6 +38,7 @@ containers:
       timeout: 5s
       start_period: 1m
   - name: "voxtral-mini-4b-realtime"
+    models: ["voxtral-mini-4b-realtime"]
     image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000"
     runtime: nvidia
     gpus: all
@@ -48,7 +49,7 @@ containers:
     command:
       [
         "--model",
-        "/tinfoil/mpk/mpk-b451a321f0da47d9a1d582d3fc46a0ef981de7617aa9e542b8252face85d8bb2",
+        "/tinfoil/models/voxtral-mini-4b-realtime",
         "--served-model-name",
         "voxtral-mini-4b-realtime",
         "--tokenizer-mode",
@@ -89,6 +90,7 @@ containers:
       timeout: 5s
       start_period: 5m
   - name: "qwen3-tts"
+    models: ["qwen3-tts"]
     image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000"
     runtime: nvidia
     gpus: all
@@ -97,7 +99,7 @@ containers:
       - PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
     entrypoint: ["/bin/sh", "-c"]
     command: [
-        "ln -s /tinfoil/mpk/mpk-6d350aa3684da02b2f59157fc11b7c5ea487fa265e98ca1c1dd74cf31ac2fa7e /tmp/model-CustomVoice
+        "ln -s /tinfoil/models/qwen3-tts /tmp/model-CustomVoice
         && exec vllm serve /tmp/model-CustomVoice --stage-configs-path /opt/realtime-configs/qwen3_tts_realtime.yaml --port
         8505 --host 0.0.0.0 --trust-remote-code --enforce-eager --omni --log-stats --served-model-name qwen3-tts",
       ]
@@ -111,6 +113,7 @@ containers:
       timeout: 5s
       start_period: 5m
   - name: "voxtral-tts"
+    models: ["voxtral-tts"]
     image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000"
     runtime: nvidia
     gpus: all
@@ -119,7 +122,7 @@ containers:
       - PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
     entrypoint: ["/bin/sh", "-c"]
     command: [
-        "ln -s /tinfoil/mpk/mpk-8f7b7407c2bd621160a89d5c3ed845baecd2912850aceca2ad264f06442f471b /tmp/model-VoxtralTTS
+        "ln -s /tinfoil/models/voxtral-tts /tmp/model-VoxtralTTS
         && exec vllm serve /tmp/model-VoxtralTTS --stage-configs-path /opt/realtime-configs/voxtral_tts_realtime.yaml --port
         8605 --host 0.0.0.0 --trust-remote-code --enforce-eager --omni --log-stats --tokenizer-mode mistral --config-format mistral --load-format
         mistral --served-model-name voxtral-tts",
@@ -134,6 +137,7 @@ containers:
       timeout: 5s
       start_period: 5m
   - name: "whisper-large-v3-turbo"
+    models: ["whisper-large-v3-turbo"]
     image: "ghcr.io/tinfoilsh/confidential-realtime-models-omni@sha256:0000000000000000000000000000000000000000000000000000000000000000"
     runtime: nvidia
     gpus: all
@@ -143,7 +147,7 @@ containers:
     entrypoint: ["vllm", "serve"]
     command:
       [
-        "/tinfoil/mpk/mpk-dd81839982fa01a289f7b60613055e4e1f789503c25a3535b75d53841f7f5b78",
+        "/tinfoil/models/whisper-large-v3-turbo",
         "--served-model-name",
         "whisper-large-v3-turbo",
         "--gpu-memory-utilization",
